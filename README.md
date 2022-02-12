@@ -46,7 +46,7 @@ Using `mmix-mode`
 
 * `C-j` (`electric-newline-and-maybe-indent`)
 
-This key will move to a new line and insert a tab.
+  This key will move to a new line and insert a tab.
 
 * `C-c C-c` (`compile`)
   
