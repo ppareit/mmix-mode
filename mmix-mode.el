@@ -40,6 +40,24 @@
   "Options for `mmix-mode'."
   :group 'languages)
 
+(defcustom mmix-mmix-program "mmix"
+  "Location of the mmix program, this is the vm that runs mmix object code.
+If the mmix program is available in the PATH, than this can stay the default
+value.  Alternatively this can also be the full path to the mmix executable.
+This is used by `mmix-run'."
+  :type 'string
+  :group 'mmix-mode)
+
+(defcustom mmix-mmixal-program "mmixal"
+  "Location of the mmixal program.
+The mmixal program is the assembler that converts assembly to to object code
+for the mmix vm.  If the mmixal program is available in the PATH, than this
+can stay the default value.  Alternatively this can also be the full path to
+the mmixal executable.
+This is used by `mmix-compile-command'."
+  :type 'string
+  :group 'mmix-mode)
+
 (defvar mmix-mode-syntax-table nil
   "Syntax table for `mmix-mode'.")
 
@@ -155,9 +173,12 @@ are inappropriate in certain contexts. They are handled in the same way as the
   )
 
 (defun mmix-compile-command ()
-  "Create a compile command for this buffer."
-  (concat "./mmixal "
-	  (if buffer-file-name (shell-quote-argument buffer-file-name))))
+  "Create a compile command for this buffer.
+This assumes that the buffer already has a name."
+  (unless buffer-file-name (error "No buffer file name"))
+  (format "%s %s"
+	  mmix-mmixal-program
+	  (shell-quote-argument buffer-file-name)))
 
 (defun mmix-object-file-name (f-name)
   "Return the filename of the MMIX object, using F-NAME."
@@ -168,7 +189,7 @@ are inappropriate in certain contexts. They are handled in the same way as the
 This assumes that the file has already been compiled."
   (interactive)
   (let* ((object-file-name (mmix-object-file-name buffer-file-name))
-	 (cmd (format "./mmix %s" object-file-name)))
+	 (cmd (format "%s %s" mmix-mmix-program object-file-name)))
     (shell-command cmd)))
 
 ;;;###autoload
