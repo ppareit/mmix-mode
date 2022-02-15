@@ -175,10 +175,14 @@ are inappropriate in certain contexts. They are handled in the same way as the
 (defun mmix-compile-command ()
   "Create a compile command for this buffer.
 This assumes that the buffer already has a name."
-  (unless buffer-file-name (error "No buffer file name"))
-  (format "%s %s"
-	  mmix-mmixal-program
-	  (shell-quote-argument buffer-file-name)))
+  (cond ((not buffer-file-name)
+	 (message "Error to set compile command: %s"
+		  "The file has to be saved at least once."))
+	((not (executable-find mmix-mmixal-program))
+	 (message "Error to set compile command: %s"
+		  (format "'%s' not found, see install instructions."
+		  mmix-mmixal-program))))
+  (format "%s %s" mmix-mmixal-program (shell-quote-argument buffer-file-name)))
 
 (defun mmix-object-file-name (f-name)
   "Return the filename of the MMIX object, using F-NAME."
