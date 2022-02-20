@@ -136,6 +136,12 @@ are inappropriate in certain contexts. They are handled in the same way as the
 `mmix-ops'."))
 
 (eval-and-compile
+  (defconst mmix-ops-and-pseudo-ops
+    (append mmix-ops mmix-pseudo-ops mmix-alias-ops)
+    "Ops, pseudo ops and aliases that start with a tab. This list is needed in
+`mmix-indent-line'."))
+
+(eval-and-compile
   (defconst mmix-globals
     '("ROUND_CURRENT" "ROUND_OFF" "ROUND_UP" "ROUND_DOWN" "ROUND_NEAR"
       "Inf"
@@ -167,10 +173,39 @@ are inappropriate in certain contexts. They are handled in the same way as the
   "Additional expressions to highlight in MMIX mode.")
 
 (defun mmix-indent-line ()
-  "Indent current line as MMIXAL code."
+  "Indent current line as MMIXAL code.
+
+The indenting for mmixal works as follows:
+  * Initially indent like the previous line.
+  * If line starts with a label, indent starts leftmost.
+  * If line starts with an op or pseudo op, start with one tab."
   (interactive)
-  (insert "\t")
-  )
+  (if (line-empty-p)
+      (if (previous-line-begins-in-first-column-p)
+	    (indent-line-to 0)
+	(indent-line-to 8))
+    (if (string-match-p (regexp-opt mmix-ops-and-pseudo-ops 'words) (first-word-of-line))
+	(indent-line-to 8)
+      (indent-line-to 0))))
+
+(defun first-word-of-line ()
+  "Return the first word of the current line."
+  (save-excursion
+    (beginning-of-line)
+    (current-word)))
+
+(defun previous-line-begins-in-first-column-p ()
+  "Look at the previous line and return non-nil if that line begins in the first column."
+  (save-excursion
+    (forward-line -1)
+    (back-to-indentation)
+    (= (current-column) 0)))
+
+(defun line-empty-p ()
+  "Return non-nil if the current line is empty."
+  (save-excursion
+    (beginning-of-line)
+    (looking-at-p "[[:space:]]*$")))
 
 (defun mmix-compile-command ()
   "Create a compile command for this buffer.
@@ -206,9 +241,9 @@ This assumes that the file has already been compiled."
   (setq-local comment-start "% ")
   (setq-local font-lock-defaults '(mmix-font-lock-keywords))
   (setq-local comment-column 32)
-  (setq-local fill-prefix "\t")
   (setq-local compile-command (mmix-compile-command))
   (setq-local indent-line-function #'mmix-indent-line)
+  (setq-local tab-always-indent nil)
   )
 
 ;;;###autoload
