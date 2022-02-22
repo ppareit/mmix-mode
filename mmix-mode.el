@@ -227,9 +227,14 @@ This assumes that the buffer already has a name."
   "Run the mmix program in current buffer.
 This assumes that the file has already been compiled."
   (interactive)
-  (let* ((object-file-name (mmix-object-file-name buffer-file-name))
-	 (cmd (format "%s %s" mmix-mmix-program object-file-name)))
-    (shell-command cmd)))
+  (cond ((not (executable-find mmix-mmix-program))
+	 (message "Error to start vm: %s"
+		  (format "'%s' not found, see install instructions."
+			  mmix-mmix-program)))
+	(t
+	 (let* ((object-file-name (mmix-object-file-name buffer-file-name))
+		(cmd (format "%s %s" mmix-mmix-program object-file-name)))
+	   (shell-command cmd)))))
 
 ;;;###autoload
 (define-derived-mode mmix-mode  prog-mode  "MMIX"
