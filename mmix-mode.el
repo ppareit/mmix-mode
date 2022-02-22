@@ -254,6 +254,16 @@ This assumes that the file has already been compiled."
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.mms" . mmix-mode))
 
+(flycheck-define-checker mmixal
+  "A mmixal syntax checker using the mmixal assembler."
+  :command ("mmixal" source)
+  :error-patterns
+  ((error line-start "\"" (file-name) "\", line " line ": " (message) line-end)
+   (warning line-start "\"" (file-name) "\", line "line " warning: " (message) line-end))
+  :modes mmix-mode)
+
+(add-to-list 'flycheck-checkers 'mmixal)
+
 (provide 'mmix-mode)
 
 ;;; mmix-mode.el ends here
