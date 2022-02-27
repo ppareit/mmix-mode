@@ -238,7 +238,8 @@ This assumes that the file has already been compiled."
 
 ;;;###autoload
 (define-derived-mode mmix-mode  prog-mode  "MMIX"
-  "Major mode for editing MMIX assembly programs."
+  "Major mode for editing MMIXAL assembly programs.
+This mode depends on the `mmix' and `mmixal' binaries, see the MMIX Home Page at the URL ‘http://mmix.cs.hm.edu/’."
   :group 'mmix-mode
   :syntax-table nil ;mmix-mode-syntax-table
   :abbrev-table mmix-mode-abbrev-table
