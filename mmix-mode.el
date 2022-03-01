@@ -139,7 +139,7 @@ are inappropriate in certain contexts. They are handled in the same way as the
   (defconst mmix-ops-and-pseudo-ops
     (append mmix-ops mmix-pseudo-ops mmix-alias-ops)
     "Ops, pseudo ops and aliases that start with a tab. This list is needed in
-`mmix-indent-line'."))
+`mmix-indent-line' and `mmix-completion-at-point'."))
 
 (eval-and-compile
   (defconst mmix-globals
@@ -158,8 +158,45 @@ are inappropriate in certain contexts. They are handled in the same way as the
 
 (eval-and-compile
   (defconst mmix-functions
-    '("Main")
+    '("Main" ":Main")
     "Entry point of MMIX program in `mmix-mode'."))
+
+(eval-and-compile
+  (defconst mmix-local-symbols
+    '("0H" "1H" "2H" "3H" "4H" "5H" "6H" "7H" "8H" "9H")
+    "Local symbols in MMIXAL. These are special symbols that can be redefined. For instance `2H' (2 Here) means that other parts can refer to the labels with `2B' (2 Backward) or `2F' (2 Forward)."))
+
+(eval-and-compile
+  (defconst mmix-label-completitions
+    (append mmix-functions mmix-local-symbols)
+    "Possible completitions for the label field. The main function and the local symbols."))
+
+(defun mmix-at-label-p ()
+  "Return non-nil when point is at the label position."
+  (< (current-column) 8))
+
+(defun mmix-at-op-p ()
+  "Return non-nil when point is at the opcode position."
+  (< 7 (current-column) 16))
+
+(defun mmix-at-expr-p ()
+  "Return non-nil when point is at the expression position.
+We are at an expression when the previous symbol is an op or pseudo op."
+  (save-excursion
+    (re-search-backward (format "%s[[:blank:]]"
+				(regexp-opt mmix-ops-and-pseudo-ops 'words))
+			(line-beginning-position)
+			t)))
+
+(defun mmix-completion-at-point ()
+  "Function to use in the hook `completion-at-point-functions'."
+  (let* ((bounds (bounds-of-thing-at-point 'symbol))
+	 (start (if bounds (car bounds) (point)))
+	 (end (if bounds (cdr bounds) (point)))
+	 (collection (cond ((mmix-at-label-p) mmix-label-completitions)
+			   ((mmix-at-op-p) mmix-ops-and-pseudo-ops)
+			   ((mmix-at-expr-p) mmix-globals))))
+	(list start end collection . nil)))
 
 ;; Keywords for Syntax-Highlighting
 (defconst mmix-font-lock-keywords
@@ -250,7 +287,10 @@ This mode depends on the `mmix' and `mmixal' binaries, see the MMIX Home Page at
   (setq-local compile-command (mmix-compile-command))
   (setq-local indent-line-function #'mmix-indent-line)
   (setq-local tab-always-indent nil)
-  )
+  (add-hook 'completion-at-point-functions
+	    'mmix-completion-at-point
+	    nil
+	    'local))
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.mms" . mmix-mode))
