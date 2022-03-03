@@ -42,19 +42,19 @@
 
 (defcustom mmix-mmix-program "mmix"
   "Location of the mmix program, this is the vm that runs mmix object code.
-If the mmix program is available in the PATH, than this can stay the default
-value.  Alternatively this can also be the full path to the mmix executable.
-This is used by `mmix-run'."
+If the mmix program is available in the PATH, than this can stay
+the default value.  Alternatively this can also be the full path
+to the mmix executable.  This is used by `mmix-run'."
   :type 'string
   :group 'mmix-mode)
 
 (defcustom mmix-mmixal-program "mmixal"
   "Location of the mmixal program.
-The mmixal program is the assembler that converts assembly to to object code
-for the mmix vm.  If the mmixal program is available in the PATH, than this
-can stay the default value.  Alternatively this can also be the full path to
-the mmixal executable.
-This is used by `mmix-compile-command'."
+The mmixal program is the assembler that converts assembly to to
+object code for the mmix vm.  If the mmixal program is available
+in the PATH, than this can stay the default value.  Alternatively
+this can also be the full path to the mmixal executable.  This is
+used by `mmix-compile-command'."
   :type 'string
   :group 'mmix-mode)
 
@@ -86,9 +86,9 @@ This is used by `mmix-compile-command'."
     '("IS" "LOC" "PREFIX" "GREG" "LOCAL" "BSPEC" "ESPEC"
       "BYTE" "WYDE" "TETRA" "OCTA")
     "Pseudo-operations of `mmix-mode'.
-Pseudo-operations are operators of MMIXAL but not of MMIX.
-They provide special information about a symbolic program,
-without being instructions of the program itself."))
+Pseudo-operations are operators of MMIXAL but not of MMIX.  They
+provide special information about a symbolic program, without
+being instructions of the program itself."))
 
 (eval-and-compile
   (defconst mmix-ops
@@ -131,15 +131,16 @@ Operation codes of MMIX, short the op codes."))
   (defconst mmix-alias-ops
     '("SET" "LDA")
     "Alias operation codes of `mmix-mode'.
-Alias operations are alternate names for MMIX operations whose standard names
-are inappropriate in certain contexts. They are handled in the same way as the
-`mmix-ops'."))
+Alias operations are alternate names for MMIX operations whose
+standard names are inappropriate in certain contexts. They are
+handled in the same way as the `mmix-ops'."))
 
 (eval-and-compile
   (defconst mmix-ops-and-pseudo-ops
     (append mmix-ops mmix-pseudo-ops mmix-alias-ops)
-    "Ops, pseudo ops and aliases that start with a tab. This list is needed in
-`mmix-indent-line' and `mmix-completion-at-point'."))
+    "Ops, pseudo ops and aliases that start with a tab.
+This list is needed in `mmix-indent-line' and
+`mmix-completion-at-point'."))
 
 (eval-and-compile
   (defconst mmix-globals
@@ -164,12 +165,16 @@ are inappropriate in certain contexts. They are handled in the same way as the
 (eval-and-compile
   (defconst mmix-local-symbols
     '("0H" "1H" "2H" "3H" "4H" "5H" "6H" "7H" "8H" "9H")
-    "Local symbols in MMIXAL. These are special symbols that can be redefined. For instance `2H' (2 Here) means that other parts can refer to the labels with `2B' (2 Backward) or `2F' (2 Forward)."))
+    "Local symbols in MMIXAL.
+These are special symbols that can be redefined. For instance
+ `2H' (2 Here) means that other parts can refer to the labels
+ with `2B' (2 Backward) or `2F' (2 Forward)."))
 
 (eval-and-compile
   (defconst mmix-label-completitions
     (append mmix-functions mmix-local-symbols)
-    "Possible completitions for the label field. The main function and the local symbols."))
+    "Possible completitions for the label field.
+The main function and the local symbols."))
 
 (defun mmix-at-label-p ()
   "Return non-nil when point is at the label position."
@@ -181,7 +186,8 @@ are inappropriate in certain contexts. They are handled in the same way as the
 
 (defun mmix-at-expr-p ()
   "Return non-nil when point is at the expression position.
-We are at an expression when the previous symbol is an op or pseudo op."
+We are at an expression when the previous symbol is an op or
+pseudo op."
   (save-excursion
     (re-search-backward (format "%s[[:blank:]]"
 				(regexp-opt mmix-ops-and-pseudo-ops 'words))
@@ -232,7 +238,7 @@ The indenting for mmixal works as follows:
     (current-word)))
 
 (defun previous-line-begins-in-first-column-p ()
-  "Look at the previous line and return non-nil if that line begins in the first column."
+  "Return non-nil if previous line begins in the first column."
   (save-excursion
     (forward-line -1)
     (back-to-indentation)
@@ -276,7 +282,8 @@ This assumes that the file has already been compiled."
 ;;;###autoload
 (define-derived-mode mmix-mode  prog-mode  "MMIX"
   "Major mode for editing MMIXAL assembly programs.
-This mode depends on the `mmix' and `mmixal' binaries, see the MMIX Home Page at the URL ‘http://mmix.cs.hm.edu/’."
+This mode depends on the `mmix' and `mmixal' binaries, see the
+MMIX Home Page at the URL ‘http://mmix.cs.hm.edu/’."
   :group 'mmix-mode
   :syntax-table nil ;mmix-mode-syntax-table
   :abbrev-table mmix-mode-abbrev-table
