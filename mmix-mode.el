@@ -34,6 +34,14 @@
 ;; Fascicle 1
 ;; By Donald E. Knuth
 
+;;; Todo's and resources:
+;; Usefull summary of instructions list:
+;;       https://www-cs-faculty.stanford.edu/~knuth/mmop.html
+;; We can improve on the usage of comments:
+;;       https://sourceware.org/binutils/docs/as/MMIX_002dChars.html
+;; We can use named registers:
+;;       https://sourceware.org/binutils/docs/as/MMIX_002dRegs.html
+
 ;;; Code:
 
 (defgroup mmix-mode nil
@@ -154,7 +162,8 @@ This list is needed in `mmix-indent-line' and
       "TextRead" "TextWrite" "BinaryRead"
       "BinaryWrite" "BinaryReadWrite"
       "Halt"
-      "Fopen" "Fclose" "Fread" "Fgets" "Fgetws" "Fwrite" "Fputs" "Fputws" "Fseek" "Ftell")
+      "Fopen" "Fclose" "Fread" "Fgets" "Fgetws"
+      "Fwrite" "Fputs" "Fputws" "Fseek" "Ftell")
     "Global variables of `mmix-mode'."))
 
 (eval-and-compile
@@ -227,7 +236,8 @@ The indenting for mmixal works as follows:
       (if (previous-line-begins-in-first-column-p)
 	    (indent-line-to 0)
 	(indent-line-to 8))
-    (if (string-match-p (regexp-opt mmix-ops-and-pseudo-ops 'words) (first-word-of-line))
+    (if (string-match-p (regexp-opt mmix-ops-and-pseudo-ops 'words)
+			(first-word-of-line))
 	(indent-line-to 8)
       (indent-line-to 0))))
 
@@ -306,8 +316,10 @@ MMIX Home Page at the URL ‘http://mmix.cs.hm.edu/’."
   "A mmixal syntax checker using the mmixal assembler."
   :command ("mmixal" source)
   :error-patterns
-  ((error line-start "\"" (file-name) "\", line " line ": " (message) line-end)
-   (warning line-start "\"" (file-name) "\", line "line " warning: " (message) line-end))
+  ((error line-start "\"" (file-name) "\", line " line ": " (message)
+	  line-end)
+   (warning line-start "\"" (file-name) "\", line "line " warning: "
+	    (message) line-end))
   :modes mmix-mode)
 
 (add-to-list 'flycheck-checkers 'mmixal)
