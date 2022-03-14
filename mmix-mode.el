@@ -318,8 +318,23 @@ MMIX Home Page at the URL ‘http://mmix.cs.hm.edu/’."
   :error-patterns
   ((error line-start "\"" (file-name) "\", line " line ": " (message)
 	  line-end)
-   (warning line-start "\"" (file-name) "\", line "line " warning: "
-	    (message) line-end))
+   (warning line-start "\"" (file-name) "\", line " line " warning: "
+	    (message) line-end)
+   (error line-start "\"(nofile)\", line " line "fatal error: " (message)
+	  line-end)
+   ;; eat away lines between parenthesis
+   (line-start "(" (zero-or-more not-newline) ")" line-end)
+   ;; all other erros are global errors w/o line number
+   (error line-start (message) line-end))
+  :error-filter
+  (lambda (errors)
+    (setq errors (flycheck-sanitize-errors errors))
+    (dolist (err errors)
+      ;; give errors w/o line number the last line number
+      (unless (flycheck-error-line err)
+	(setf (flycheck-error-line err)
+	      (1+ (count-lines (point-min) (point-max))))))
+    errors)
   :modes mmix-mode)
 
 (add-to-list 'flycheck-checkers 'mmixal)
