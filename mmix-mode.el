@@ -66,6 +66,17 @@ used by `mmix-compile-command'."
   :type 'string
   :group 'mmix-mode)
 
+(defcustom mmix-mmixal-expand-flag nil
+  "Add the option to mmixal to expand memmory-oriented commands.
+This is the `-x' option for `mmixal'.  This option expands
+memory-oriented commands that cannot be assembled as single
+instructions, by assembling auxiliary instructions that make temporary
+use of global register $255.
+This option is used in `mmix-compile-command' and
+`mmixal-flycheck-error-parser'."
+  :type 'boolean
+  :group 'mmix-mode)
+
 (defvar mmix-mode-syntax-table nil
   "Syntax table for `mmix-mode'.")
 
@@ -270,7 +281,10 @@ This assumes that the buffer already has a name."
 	 (message "Error to set compile command: %s"
 		  (format "'%s' not found, see install instructions."
 		  mmix-mmixal-program))))
-  (format "%s %s" mmix-mmixal-program (shell-quote-argument buffer-file-name)))
+  (format "%s %s %s"
+	  mmix-mmixal-program
+	  (if mmix-mmixal-expand-flag "-x" "")
+	  (shell-quote-argument buffer-file-name)))
 
 (defun mmix-object-file-name (f-name)
   "Return the filename of the MMIX object, using F-NAME."
@@ -314,7 +328,9 @@ MMIX Home Page at the URL ‘http://mmix.cs.hm.edu/’."
 
 (flycheck-define-checker mmixal
   "A mmixal syntax checker using the mmixal assembler."
-  :command ("mmixal" source)
+  :command ("mmixal"
+	    (option-flag "-x" mmix-mmixal-expand-flag)
+	    source)
   :error-patterns
   ((error line-start "\"" (file-name) "\", line " line ": " (message)
 	  line-end)
