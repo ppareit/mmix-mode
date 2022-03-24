@@ -195,8 +195,12 @@ Optional parameters IGNORE-AUTO and NOCONFIRM are defined as in
     (mmix-mmo-redisplay)))
 
 ;;;###autoload
-(define-derived-mode mmix-mmo-mode special-mode "MMIX MMO"
-  "Major mode for viewing MMIX object files."
+(define-derived-mode mmix-mmo-mode fundamental-mode "MMIX MMO"
+  "Major mode for viewing MMIX object files.
+
+This mode depends on the binary `mmotype', see
+URL `http://mmix.cs.hm.edu/bin/index.html'. The location of the
+binary can be costumized with `mmix-mmotype-program'."
   :group 'mmix-mode
   :syntax-table nil
   :abbrev-table nil

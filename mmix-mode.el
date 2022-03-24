@@ -67,7 +67,7 @@ used by `mmix-compile-command'."
   :group 'mmix-mode)
 
 (defcustom mmix-mmixal-expand-flag nil
-  "Add the option to mmixal to expand memmory-oriented commands.
+  "Non-nil means to expand memmory-oriented commands when assembling.
 This is the `-x' option for `mmixal'.  This option expands
 memory-oriented commands that cannot be assembled as single
 instructions, by assembling auxiliary instructions that make temporary
