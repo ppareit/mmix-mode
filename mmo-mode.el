@@ -179,24 +179,33 @@ See `mmix-mmo-get-point' for the contens of POS."
 (defun mmix-mmo-redisplay ()
   "(Re)display the MMIX object file in the buffer."
   (interactive)
-  (read-only-mode 0)
-  (delete-region (point-min) (point-max))
-  (insert (shell-command-to-string
-           (format "mmotype %s %s"
-		   (if mmix-mmo-list-also-tetrabytes "-v" "")
-		   (buffer-file-name))))
-  (set-buffer-modified-p nil)
-  (read-only-mode 1))
+  (let ((inhibit-read-only t))
+    (delete-region (point-min) (point-max))
+    (insert (shell-command-to-string
+             (format "mmotype %s %s"
+		     (if mmix-mmo-list-also-tetrabytes "-v" "")
+		     (buffer-file-name))))))
+
+(defun mmix-mmo-revert-buffer (&optional ignore-auto noconfirm)
+  "Revert buffer by rerunning the `mmotype' program on the file.
+Optional parameters IGNORE-AUTO and NOCONFIRM are defined as in
+`revert-buffer'."
+  (let ((revert-buffer-function #'revert-buffer--default))
+    (revert-buffer ignore-auto noconfirm 'preserve-modes)
+    (mmix-mmo-redisplay)))
 
 ;;;###autoload
-(define-derived-mode mmix-mmo-mode fundamental-mode "MMIX MMO"
+(define-derived-mode mmix-mmo-mode special-mode "MMIX MMO"
   "Major mode for viewing MMIX object files."
   :group 'mmix-mode
   :syntax-table nil
   :abbrev-table nil
   :keymap mmix-mmo-mode-map
-  (mmix-mmo-redisplay)
-  )
+  (setq-local buffer-read-only t)
+  (setq-local revert-buffer-function #'mmix-mmo-revert-buffer)
+  (setq-local buffer-auto-save-file-name nil)
+  (buffer-disable-undo)
+  (mmix-mmo-redisplay))
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.mmo" . mmix-mmo-mode))
