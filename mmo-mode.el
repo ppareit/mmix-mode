@@ -188,7 +188,36 @@ See `mmix-mmo-get-point' for the contens of POS."
     (insert (shell-command-to-string
              (format "mmotype %s %s"
 		     (if mmix-mmo-list-also-tetrabytes "-v" "")
-		     (buffer-file-name))))))
+		     (buffer-file-name))))
+    (mmix-mmo-linkify)))
+
+(defun mmix-mmo-mms-filename ()
+  "Return the filename of the associated mms file."
+  (format "%s.mms" (file-name-sans-extension (buffer-file-name))))
+
+(defun mmix-mmo-goto-line-button-pressed (button)
+  "Open associated file and goto the correct line when the BUTTON is pressed."
+  (let ((source-filename (button-get button 'source-filename))
+	(line-nummer (button-get button 'line-number)))
+    (find-file-other-window source-filename)
+    (goto-char (point-min))
+    (forward-line (1- (string-to-number line-nummer)))))
+
+(defun mmix-mmo-linkify ()
+  "Linkify the mmo buffer.
+* Jump to the lines in the mms file"
+  (save-excursion
+    (goto-char (point-min))
+    (while (search-forward-regexp "line \\([[:digit:]]+\\)" nil t)
+      (let ((source-filename (mmix-mmo-mms-filename))
+	    (line-nummer (match-string-no-properties 1)))
+	(make-button (match-beginning 0) (match-end 0)
+		     'action 'mmix-mmo-goto-line-button-pressed
+		     'follow-link t
+		     'help-echo (format "Open %s at line %s."
+					source-filename line-nummer)
+		     'source-filename source-filename
+		     'line-number line-nummer)))))
 
 (defun mmix-mmo-revert-buffer (&optional ignore-auto noconfirm)
   "Revert buffer by rerunning the `mmotype' program on the file.
