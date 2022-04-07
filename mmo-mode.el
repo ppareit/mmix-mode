@@ -98,8 +98,9 @@ value.  Alternatively this can also be the full path to the mmotype executable."
   "Return line in listing where point is at, or nil when not in listing."
   (interactive)
     (and (save-excursion (search-backward-regexp "^File was created .*\n" nil t))
-	 (save-excursion (search-forward-regexp "[[:xdigit:]]\\{16\\}: [[:xdigit:]]\\{8\\}.*"
-						nil t))
+	 (save-excursion
+	   (search-forward-regexp "[[:xdigit:]]\\{16\\}: [[:xdigit:]]\\{8\\}.*"
+				  nil t))
 	 (save-excursion
 	   (beginning-of-line)
 	   (let ((end-point (point)))
@@ -111,7 +112,8 @@ value.  Alternatively this can also be the full path to the mmotype executable."
   "Move point to the LISTING-LINE line in the listing."
   (interactive)
   (mmix-mmo-goto-preamble)
-  (search-forward-regexp "^[[:xdigit:]]\\{16\\}: [[:xdigit:]]\\{8\\}.*" nil nil listing-line)
+  (search-forward-regexp "^[[:xdigit:]]\\{16\\}: [[:xdigit:]]\\{8\\}.*"
+			 nil nil listing-line)
   (beginning-of-line))
 
 (defun mmix-mmo-get-symbol-table-symbol ()
@@ -129,7 +131,8 @@ Symbol can be
      (search-backward-regexp "^g[[:xdigit:]]\\{3\\}: [[:xdigit:]]\\{16\\}" nil t))
    (save-excursion
      (beginning-of-line)
-     (cond ((search-forward-regexp "^Symbol table (beginning at tetra [[:digit:]]?" nil t)
+     (cond ((search-forward-regexp
+	     "^Symbol table (beginning at tetra [[:digit:]]?" nil t)
 	    'symbol-table-beginning)
 	   ((search-forward-regexp
 	     "^[[:space:]]\\{4\\}\\([[:alpha:]]+\\) = \\(\\(#[[:xdigit:]]\\{4\\}\\)\\|\\(\$[[:xdigit:]]*\\)\\) ([[:digit:]]+)"
@@ -166,7 +169,8 @@ The point is a pair (CAR . CDR) where
   (cond ((mmix-mmo-at-preamble) '(preamble . nil))
 	((mmix-mmo-at-postamble) '(postamble . nil))
 	((mmix-mmo-get-listing-line) (cons 'listing (mmix-mmo-get-listing-line)))
-	((mmix-mmo-get-symbol-table-symbol) (cons 'symbol (mmix-mmo-get-symbol-table-symbol)))))
+	((mmix-mmo-get-symbol-table-symbol)
+	 (cons 'symbol (mmix-mmo-get-symbol-table-symbol)))))
 
 (defun mmix-mmo-set-point (pos)
   "Put the point at the correct position POS.
