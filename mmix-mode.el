@@ -239,18 +239,22 @@ pseudo op."
   "Indent current line as MMIXAL code.
 
 The indenting for mmixal works as follows:
-  * Initially indent like the previous line.
+  * Initially indent with tab, ready to insert op or pseudo op.
   * If line starts with a label, indent starts leftmost.
   * If line starts with an op or pseudo op, start with one tab."
   (interactive)
   (if (line-empty-p)
-      (if (previous-line-begins-in-first-column-p)
-	    (indent-line-to 0)
-	(indent-line-to 8))
-    (if (string-match-p (regexp-opt mmix-ops-and-pseudo-ops 'words)
-			(first-word-of-line))
+      (indent-line-to 8)
+    (if (string-match-case-sensitive-p (regexp-opt mmix-ops-and-pseudo-ops 'symbols)
+				       (first-word-of-line))
 	(indent-line-to 8)
       (indent-line-to 0))))
+
+(defun string-match-case-sensitive-p (regexp string)
+  "Same as `string-match-p' but the search is case-sensitive.
+Return the index of start of first match for REGEXP in STRING or nil."
+  (let ((case-fold-search nil))
+    (string-match-p regexp string)))
 
 (defun first-word-of-line ()
   "Return the first word of the current line."
