@@ -96,6 +96,7 @@ This option is used in `mmix-compile-command' and
   (setq mmix-mode-map (make-sparse-keymap))
   (define-key mmix-mode-map "\C-c\C-c" 'compile)
   (define-key mmix-mode-map "\C-c\C-r" 'mmix-run)
+  (define-key mmix-mode-map "\C-c\C-o" 'mmix-open-object-file-in-other-window)
   )
 
 ;(makunbound 'mmix-mode-map)
@@ -290,9 +291,16 @@ This assumes that the buffer already has a name."
 	  (if mmix-mmixal-expand-flag "-x" "")
 	  (shell-quote-argument buffer-file-name)))
 
-(defun mmix-object-file-name (f-name)
-  "Return the filename of the MMIX object, using F-NAME."
+(defun mmix-object-file-name (&optional f-name)
+  "Return the filename of the MMIX object, using F-NAME.
+If the optional F-NAME is not given, uses function `buffer-file-name'."
+  (unless f-name (setq f-name (buffer-file-name)))
   (concat (file-name-sans-extension f-name) ".mmo"))
+
+(defun mmix-open-object-file-in-other-window ()
+  "Open the corresponding object file in an other window."
+  (interactive)
+  (find-file-other-window (mmix-object-file-name)))
 
 (defun mmix-run ()
   "Run the mmix program in current buffer.
