@@ -191,9 +191,9 @@ See `mmix-mmo-get-point' for the contens of POS."
 		     (buffer-file-name))))
     (mmix-mmo-linkify)))
 
-(defun mmix-mmo-mms-filename ()
+(defun mmix-mmo-source-file-name ()
   "Return the filename of the associated mms file."
-  (format "%s.mms" (file-name-sans-extension (buffer-file-name))))
+  (concat (file-name-sans-extension (buffer-file-name)) ".mms"))
 
 (defun mmix-mmo-goto-line-button-pressed (button)
   "Open associated file and goto the correct line when the BUTTON is pressed."
@@ -209,7 +209,7 @@ See `mmix-mmo-get-point' for the contens of POS."
   (save-excursion
     (goto-char (point-min))
     (while (search-forward-regexp "line \\([[:digit:]]+\\)" nil t)
-      (let ((source-filename (mmix-mmo-mms-filename))
+      (let ((source-filename (mmix-mmo-source-file-name))
 	    (line-nummer (match-string-no-properties 1)))
 	(make-button (match-beginning 0) (match-end 0)
 		     'action 'mmix-mmo-goto-line-button-pressed
