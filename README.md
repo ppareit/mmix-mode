@@ -6,6 +6,16 @@ files in the MMIXAL assembly language. This language is described in
 *The Art of Computer Programming, Volume 1, MMIX A RISC Computer for
 the New Millennium, Fascicle 1* By *Donald E. Knuth*.
 
+Features
+==========
+
+The MMIXAL assembler source files have
+* font locking
+* autocomplete
+* integrated help
+
+The MMIX object files can be displayed.
+
 Installing
 ============
 
@@ -35,33 +45,66 @@ Setting up mmix-mode with use-package
 
 ``` emacs-lisp
 (use-package mmix-mode
-  :load-path "/home/ppareit/.emacs.d/lisp-gits/mmix-mode/")
+  :load-path "/home/ppareit/.emacs.d/lisp-gits/mmix-mode/"
+  :config
+  (add-hook 'mmix-mode-hook #'flycheck-mode)
+  (add-hook 'mmix-mode-hook
+	    (lambda () (setq-local flycheck-highlighting-mode nil))))
+
+(use-package mmo-mode)
+
+(use-package mmix-describe
+  :bind (:map mmix-mode-map
+	      ("C-h o" . mmix-describe)))
 ```
-Evaluate with `C-x C-e` or restart Emacs.
+Evaluate the different s-expressions with `C-x C-e` or restart Emacs.
 
 Using `mmix-mode`
 ==============================
 
-* opening a `.mms` file will start this mode.
+Opening a MMIXAL assembler source file (extension `.mms`) will start
+this mode.
+
+* `RET` (`newline`)
+  
+  This key will move to a new line and insert a tab, you will be able
+  to start inserting opcodes. If you wish to start at the label
+  position, see the next command.
 
 * `C-j` (`electric-newline-and-maybe-indent`)
 
-  This key will move to a new line and insert a tab.
+  This key will move to a new line and indent. As the line is empty
+  this will start at the label position.
 
 * `C-c C-c` (`compile`)
   
-  This command compiles the current MMIX program.  The output file
-  is in the same directory and has the extension `.mmo`.
+  This command compiles the current MMIX program.  The output file is
+  the object file, is in the same directory and has the extension
+  `.mmo`. This files can be run with `mmix-run`, see below. This files
+  can be inspected, see the `mmo-mode` below.
 
-<!-- * `` C-x ` `` (`next-error`) -->
-
-<!--   TBD -->
+* `` C-x ` `` (`next-error`)
+  
+  This command moves point to the next error. If flycheck is also
+  enabled the error message will be displayed in the right fringe.
 
 * `C-c C-r` (`mmix-run`)
   
   This command runs the current MMIX program. This command assumes
   that the program has already been compiled.
 
+* `C-H o` (`mmix-describe`)
+
+  This command will open a *help buffer* and will describe the current
+  opcode or register of MMIX. (This is _WIP_)
+  
+Using `mmo-mode`
+===================
+
+Opening a MMIX object code file (extension `.mmo`) will start this
+mode.
+
+Click on the underlined text to go to the source or definition.
 
 <!-- Customizing -->
 <!-- ============= -->
