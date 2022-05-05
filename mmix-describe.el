@@ -221,6 +221,38 @@ end the special mode.")
 
 See also `BSPEC'.")
 
+(def-mmix-description 'MUL
+  :call "MUL $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "multiply"
+  :description "$X becomes the signed product of $Y by $Z|Z.
+
+The  contens of  of register  X  becomes the  signed  product of  the number  in
+register Y  and the  number in  register Z or  the unsigned  byte Z.  An integer
+overﬂow exception  can occur, as  with ADD  or SUB, if  the result is  less than
+−2^63 or greater than 2^63 − 1.
+
+Immediate multiplication by powers  of 2 can be done more  rapidly with the `SL'
+instruction."
+  :hex "#18")
+
+(def-mmix-description 'MULU
+  :call "MUL $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "multiply unsigned"
+  :description "$X becomes the product of the lower 64 bits of $Y by $Z|Z.
+
+The lower  64 bits  of the  unsigned 128-bit  product of  register Y  and either
+register Z or  Z are placed in register  X, and the upper 64 bits  are placed in
+the special himult register rH.
+
+Immediate multiplication by  powers of 2 can  be done more rapidly  with the SLU
+instruction, if the  upper half is not needed. Furthermore,  an instruction like
+4ADDU $X,$Y,$Y is faster than MULU $X,$Y,5."
+  :hex "#1A")
+
 (def-mmix-description 'LDB
   :call "LDB $X,$Y,$Z|Z"
   :category 'loading-data
@@ -307,7 +339,6 @@ There is no difference  between the behavior of LDOU and  LDO, since an octabyte
 can be regarded as either signed or  unsigned. LDOU is included in MMIX just for
 completeness and consistency."
   :hex "#8E")
-
 
 (def-mmix-description 'LDA
   :call "LDA $X,$Y,$Z|Z"
@@ -423,6 +454,22 @@ language conventions  of branch  instructions apply. For  example, we  can write
 GETA $X,Addr.)"
   :hex "#F4")
 
+(def-mmix-description 'JMP
+  :call "JMP Label"
+  :category 'jump
+  :type 'op
+  :name "jump"
+  :description "Jump unconditionally to Label.
+
+A  JMP command  treats bytes  X, Y,  and Z  as an  unsigned 24-bit  integer XYZ,
+usually computer by the assembler. It  allows a program to transfer control from
+location λ to any location between λ  − 67,108,864 and λ + 67,108,860 inclusive,
+using relative addressing  as in the B  and PB commands. For  even bigger jumps,
+the GO instruciton can be used.
+"
+  :hex "#F0")
+
+
 (def-mmix-description 'PUT
   :call "PUT X,$Z|Z"
   :category 'setting-register
@@ -465,7 +512,22 @@ similar to  a `JMP' instruction.  The address  of the instruciton  following the
 return to address `rJ + 4*YZ' (`YZ' is typically 0).
 
 TODO: Improve as my understanding improves."
-  :hex "#F6")
+  :hex "#F2")
+
+(def-mmix-description 'POP
+  :call "POP X,YZ"
+  :category 'subroutine
+  :type 'op
+  :name "pop registers and return from subroutine"
+  :description "Pop the registers and return from the last subroutine.
+
+This command  preserves X of the  current local registers, undoes  the effect of
+the most recent `PUSHJ' or `PUSHGO', and jumps to the instruction in M4[4YZ + rJ].
+If X >  0, the value of  $(X − 1) goes  into the hole position  where `PUSHJ' or
+`PUSHGO' stored the number of registers previously pushed.
+
+TODO: Improve as my understanding improves."
+  :hex "#F8")
 
 
 

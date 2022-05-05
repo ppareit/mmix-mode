@@ -12,6 +12,7 @@ Features
 The MMIXAL assembler source files have
 * font locking
 * autocomplete
+* flycheck support
 * integrated help
 
 The MMIX object files can be displayed.
