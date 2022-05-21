@@ -545,13 +545,165 @@ operating system kernel. For example:
 See also `TRIP' and `RESUME'."
   :hex "#00")
 
+(def-mmix-description 'rA
+  :type 'register
+  :name "arithmetic status register"
+  :code 21)
+
+(def-mmix-description 'rB
+  :type 'register
+  :name "bootstrap register"
+  :code 00)
+
+(def-mmix-description 'rC
+  :type 'register
+  :name "continuation register"
+  :code 08)
+
+(def-mmix-description 'rD
+  :type 'register
+  :name "dividend register"
+  :code 01)
+
+(def-mmix-description 'rE
+  :type 'register
+  :name "epsilon register"
+  :code 02)
+
+(def-mmix-description 'rF
+  :type 'register
+  :name "failure location register"
+  :code 22)
+
+(def-mmix-description 'rG
+  :type 'register
+  :name "global threshold register"
+  :code 19)
+
+(def-mmix-description 'rH
+  :type 'register
+  :name "himult register"
+  :code 03)
+
+(def-mmix-description 'rI
+  :type 'register
+  :name "interval counter"
+  :code 12)
+
+(def-mmix-description 'rJ
+  :type 'register
+  :name "return-jump register"
+  :code 04)
+
+(def-mmix-description 'rK
+  :type 'register
+  :name "interrupt mask register"
+  :code 15)
+
+(def-mmix-description 'rL
+  :type 'register
+  :name "local threshold register"
+  :code 20)
+
 (def-mmix-description 'rM
   :type 'register
   :name "multiplex mask register"
-  :code 5
-  :saved t
-  :put t)
+  :code 05)
 
+(def-mmix-description 'rN
+  :type 'register
+  :name "serial number"
+  :code 09)
+
+(def-mmix-description 'rO
+  :type 'register
+  :name "register stack offset"
+  :code 10)
+
+(def-mmix-description 'rP
+  :type 'register
+  :name "prediction register"
+  :code 23)
+
+(def-mmix-description 'rQ
+  :type 'register
+  :name "interrupt request register"
+  :code 16)
+
+(def-mmix-description 'rR
+  :type 'register
+  :name "remainder register"
+  :code 06)
+
+(def-mmix-description 'rS
+  :type 'register
+  :name "register stack pointer"
+  :code 11)
+
+(def-mmix-description 'rT
+  :type 'register
+  :name "trap address register"
+  :code 13)
+
+(def-mmix-description 'rU
+  :type 'register
+  :name "usage counter"
+  :code 17)
+
+(def-mmix-description 'rV
+  :type 'register
+  :name "virtual translation register"
+  :code 18)
+
+(def-mmix-description 'rW
+  :type 'register
+  :name "where-interrupted register (user)"
+  :code 24)
+
+(def-mmix-description 'rX
+  :type 'register
+  :name "execution register (user)"
+  :code 25)
+
+(def-mmix-description 'rY
+  :type 'register
+  :name "Y operand (user)"
+  :code 26)
+
+(def-mmix-description 'rZ
+:type 'register
+:name "Z operand (user)"
+:code 27)
+
+(def-mmix-description 'rBB
+:type 'register
+:name "bootstrap register (kernel)"
+:code 07)
+
+(def-mmix-description 'rTT
+:type 'register
+:name "dynamic trap address register"
+:code 14)
+
+(def-mmix-description 'rWW
+:type 'register
+:name "where-interrupted register (kernel)"
+:code 28)
+
+(def-mmix-description 'rXX
+:type 'register
+:name "execution register (kernel)"
+:code 29)
+
+(def-mmix-description 'rYY
+:type 'register
+:name "Y operand (kernel)"
+:code 30)
+
+(def-mmix-description 'rZZ
+:type 'register
+:name "Z operand (kernel)"
+:code 31)
 
 (defun mmix-description-symbol-name (description)
   "Return DESCRIPTION's symbol as a string."
@@ -594,6 +746,12 @@ See also `TRIP' and `RESUME'."
   "Format DESCRIPTION's hexadecimal value."
   (format "%s\n\n" (mmix-description-hex description)))
 
+(defun mmix-describe-register-1line (description)
+  "Format DESCRIPTION to display in one line."
+  (format "%-3s %-35s %2s\n"
+	  (mmix-description-symbol description)
+	  (mmix-description-name description)
+	  (mmix-description-code description)))
 
 ;;;###autoload
 (defun mmix-describe (symbol)
@@ -631,6 +789,19 @@ See also `TRIP' and `RESUME'."
       (when (mmix-description-hex description)
 	(princ (mmix-describe-heading "Hexadecimal value"))
 	(princ (mmix-describe-hex description))))))
+
+;;;###autoload
+(defun mmix-describe-registers ()
+  "Display all the special registers in a buffer.
+
+Source: URL `https://www-cs-faculty.stanford.edu/~knuth/mmop.html'."
+  (interactive
+   (with-output-to-temp-buffer (buffer-name (get-buffer-create "*Help*"))
+     (dolist (register-description
+	      (seq-filter (lambda (element)
+			    (equal (mmix-description-type element) 'register))
+			  (hash-table-values mmix-description-table)))
+       (princ (mmix-describe-register-1line register-description))))))
 
 
 (provide 'mmix-describe)

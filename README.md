@@ -56,7 +56,8 @@ Setting up mmix-mode with use-package
 
 (use-package mmix-describe
   :bind (:map mmix-mode-map
-	      ("C-h o" . mmix-describe)))
+	      ("C-h o" . mmix-describe)
+		  ("C-h r" . mmix-describe-registers)))
 ```
 Evaluate the different s-expressions with `C-x C-e` or restart Emacs.
 
@@ -99,6 +100,11 @@ this mode.
   This command will open a *help buffer* and will describe the current
   opcode or register of MMIX. (This is _WIP_)
   
+* `C-H r` (`mmix-describe-registers`)
+
+  This command will open a *help buffer* and will display a list
+  of all possible global registers of MMIX.
+
 Using `mmo-mode`
 ===================
 
