@@ -795,13 +795,13 @@ See also `TRIP' and `RESUME'."
   "Display all the special registers in a buffer.
 
 Source: URL `https://www-cs-faculty.stanford.edu/~knuth/mmop.html'."
-  (interactive
-   (with-output-to-temp-buffer (buffer-name (get-buffer-create "*Help*"))
-     (dolist (register-description
-	      (seq-filter (lambda (element)
-			    (equal (mmix-description-type element) 'register))
-			  (hash-table-values mmix-description-table)))
-       (princ (mmix-describe-register-1line register-description))))))
+  (interactive)
+  (with-output-to-temp-buffer (buffer-name (get-buffer-create "*Help*"))
+    (dolist (register-description
+	     (seq-filter (lambda (element)
+			   (equal (mmix-description-type element) 'register))
+			 (hash-table-values mmix-description-table)))
+      (princ (mmix-describe-register-1line register-description)))))
 
 
 (provide 'mmix-describe)
