@@ -753,6 +753,14 @@ See also `TRIP' and `RESUME'."
 	  (mmix-description-name description)
 	  (mmix-description-code description)))
 
+(defun mmix-describe-instruction-1line (description)
+  "Format instruction DESCRIPTION to display in one line."
+  (format "%-4s %-8s %-35s\n"
+	  (mmix-description-hex description)
+	  (mmix-description-symbol description)
+	  (mmix-description-name description)))
+
+
 ;;;###autoload
 (defun mmix-describe (symbol)
   "Display the documentation of SYMBOL."
@@ -802,6 +810,21 @@ Source: URL `https://www-cs-faculty.stanford.edu/~knuth/mmop.html'."
 			   (equal (mmix-description-type element) 'register))
 			 (hash-table-values mmix-description-table)))
       (princ (mmix-describe-register-1line register-description)))))
+
+;;;###autoload
+(defun mmix-summarize-instructions ()
+  "Display all the instructions in a help buffer.
+
+Source: URL `https://www-cs-faculty.stanford.edu/~knuth/mmop.html'."
+  (interactive)
+  (with-output-to-temp-buffer (buffer-name (get-buffer-create "*Help*"))
+    (dolist (instruction-description
+	     (sort (seq-filter (lambda (element)
+				 (equal (mmix-description-type element) 'op))
+			       (hash-table-values mmix-description-table))
+		   (lambda (d1 d2) (string< (mmix-description-symbol d1)
+				       (mmix-description-symbol d2)))))
+      (princ (mmix-describe-instruction-1line instruction-description)))))
 
 
 (provide 'mmix-describe)
