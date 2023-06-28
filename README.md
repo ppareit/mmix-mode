@@ -9,13 +9,13 @@ the New Millennium, Fascicle 1* By *Donald E. Knuth*.
 Features
 ==========
 
-The MMIXAL assembler source files have
-* font locking
-* autocomplete
-* flycheck support
-* integrated help
+Here are some of the features of `mmix-mode`:
 
-The MMIX object files can be displayed.
+* Font locking
+* Autocomplete
+* Flycheck support (for syntax checking)
+* Integrated help
+* Ability to display MMIX object files
 
 Installing
 ============
