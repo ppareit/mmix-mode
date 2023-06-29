@@ -338,6 +338,123 @@ This instruction is simply a synonym for the `ADDU' instruction."
 ;;
 ;; Storing Data
 ;;
+
+(def-mmix-description 'STB
+  :call "STB $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store byte"
+  :description "The least significant byte of $X is tored into M[$Y+$Z|Z].
+
+The  least signifificant  byte of  register X  is stored  into byte  M[$Y+$Z] or
+M[$Y+Z].
+
+* If $X is not between −128 and +127, an integer overﬂow exception occurs."
+  :hex "#A0")
+
+(def-mmix-description 'STBU
+  :call "STBU $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store byte unsigned"
+  :description "The least significant byte of $X is tored into M[$Y+$Z|Z].
+
+The  least significant  byte  of register  X  is stored  into  byte M[$Y+$Z]  or
+M[$Y+Z].  STBU  instructions are the  same as  STB instructions, except  that no
+test for overﬂow is made."
+  :hex "#A2")
+
+(def-mmix-description 'STW
+  :call "STW $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store wyde"
+  :description "The two least significant bytes $X are stored into M2[$Y+$Z|Z].
+
+The two least significant bytes of register $X are stored into bytes M2[$Y+$Z] or
+M2[$Y+Z].
+
+* If $X is not between −32768 and +32767, an integer overflow exception occurs."
+  :hex "#A4")
+
+(def-mmix-description 'STWU
+  :call "STWU $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store wyde unsigned"
+  :description "The two least significant bytes of $X are stored into  M2[$Y+$Z|Z].
+
+The two least significant bytes of register $X are stored into bytes M2[$Y+$Z] or
+M2[$Y+Z]. STWU instructions are the same as STW instructions, except that no test
+for overflow is made."
+  :hex "#A6")
+
+(def-mmix-description 'STT
+  :call "STT $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store tetra"
+  :description "The four least significant bytes of $X are stored into M4[$Y+$Z|Z].
+
+The four least significant bytes of register $X are stored into bytes M4[$Y+$Z] or
+M4[$Y+Z].
+
+* If $X is not between −2,147,483,648 and +2,147,483,647, an integer overflow
+  exception occurs."
+  :hex "#A8")
+
+(def-mmix-description 'STTU
+  :call "STTU $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store tetra unsigned"
+  :description "The four least significant bytes of $X are stored into M4[$Y+$Z|Z].
+
+The four least significant bytes of register $X are stored into bytes M4[$Y+$Z] or
+M4[$Y+Z]. STTU instructions are the same as STT instructions, except that no test
+for overflow is made."
+  :hex "#AA")
+
+(def-mmix-description 'STO
+  :call "STO $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store octa"
+  :description "$X is stored into M8[$Y+$Z|Z].
+
+Register $X is stored into bytes M8[$Y+$Z] or M8[$Y+Z]."
+  :hex "#AC")
+
+(def-mmix-description 'STOU
+  :call "STOU $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store octa unsigned"
+  :description "$X is stored into M8[$Y+$Z|Z].
+
+Identical to STO $X,$Y,$Z|Z."
+  :hex "#AE")
+
+(def-mmix-description 'STCO
+  :call "STCO $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store constant octabyte"
+  :description "An octabyte whose value is unsigned byte $X is stored into M8[$Y+$Z|Z].
+
+An octabyte whose value is the unsigned byte $X is stored into M8[$Y+$Z] or M8[$Y+Z]."
+  :hex "#B4")
+
+(def-mmix-description 'STHT
+  :call "STHT $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store high tetra"
+  :description "The most significant four bytes of $X are stored into M4[$Y+$Z|Z].
+
+The most significant four bytes of register $X are stored into M4[$Y+$Z] or M4[$Y+Z]."
+  :hex "#B2")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Setting Registers
