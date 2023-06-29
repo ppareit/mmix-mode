@@ -90,6 +90,11 @@ REST are the properties."
     (interrupts . "Interrupts")
     (namespace . "Name space")))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Assembler Directives
+;;
+
 (def-mmix-description 'IS
   :call "Label IS Expression"
   :category 'assembler-directive
@@ -227,6 +232,10 @@ See also `BSPEC'.")
   :type 'op
   :name "multiply"
   :description "$X becomes the signed product of $Y by $Z|Z.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Allocating Data
+;;
 
 The  contens of  of register  X  becomes the  signed  product of  the number  in
 register Y  and the  number in  register Z or  the unsigned  byte Z.  An integer
@@ -252,6 +261,11 @@ Immediate multiplication by  powers of 2 can  be done more rapidly  with the SLU
 instruction, if the  upper half is not needed. Furthermore,  an instruction like
 4ADDU $X,$Y,$Y is faster than MULU $X,$Y,5."
   :hex "#1A")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Loading Data
+;;
 
 (def-mmix-description 'LDB
   :call "LDB $X,$Y,$Z|Z"
@@ -351,6 +365,15 @@ completeness and consistency."
 This instruction is simply a synonym for the `ADDU' instruction."
   :hex "#22")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Storing Data
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Setting Registers
+;;
+
 (def-mmix-description 'SET
   :call "SET $X,$Y|Y"
   :category 'setting-register
@@ -370,6 +393,15 @@ equivalent to SETL $X,Y.")
   :name "set to high wyde"
   :description "16-bit unsigned YZ is shifted left by 48 bits and set into register X."
   :hex "#E0")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Integer Arithmetic
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Bitwise Operations
+;;
 
 (def-mmix-description 'ORH
   :call "ORH $X,YZ"
@@ -441,6 +473,10 @@ unsigned numbers. The SLU instructions are equivalent to SL, except that no test
 for overﬂow is made."
   :hex "#3A")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Floating Point Arithmetic
+;;
 
 (def-mmix-description 'GETA
   :call "GETA $X,Label"
@@ -453,6 +489,11 @@ The value λ  + 4YZ or λ  + 4(YZ − 2^16)  is placed in register  X. (The asse
 language conventions  of branch  instructions apply. For  example, we  can write
 GETA $X,Addr.)"
   :hex "#F4")
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Jumps and Branches
+;;
+
 
 (def-mmix-description 'JMP
   :call "JMP Label"
@@ -469,6 +510,10 @@ the GO instruciton can be used.
 "
   :hex "#F0")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Subroutines
+;;
 
 (def-mmix-description 'PUT
   :call "PUT X,$Z|Z"
@@ -529,7 +574,10 @@ If X >  0, the value of  $(X − 1) goes  into the hole position  where `PUSHJ' 
 TODO: Improve as my understanding improves."
   :hex "#F8")
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Calling the Operating System
+;;
 
 (def-mmix-description 'TRAP
   :call "TRAP X,Y,Z"
@@ -544,6 +592,12 @@ operating system kernel. For example:
   * TRAP 0,Halt,0 is typically written to make the main programm end.
 See also `TRIP' and `RESUME'."
   :hex "#00")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Registers
+;;
+
 
 (def-mmix-description 'rA
   :type 'register
@@ -704,6 +758,11 @@ See also `TRIP' and `RESUME'."
 :type 'register
 :name "Z operand (kernel)"
 :code 31)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Code
+;;
 
 (defun mmix-description-symbol-name (description)
   "Return DESCRIPTION's symbol as a string."
