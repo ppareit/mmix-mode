@@ -129,6 +129,58 @@ Often the  Expression is
   :name "set prefix"
   :description "Redefines the current prefix to be the given Symbol.")
 
+(def-mmix-description 'GREG
+  :call "Label GREG Expression"
+  :category 'assembler-directive
+  :type 'pseudo-op
+  :name "global register"
+  :description "Allocate a new global register.
+
+Set aside a new global register  containing the value Expression. Label can then
+be used  as the name  for this  register. A commonly  used expression is  @ (the
+current location). If Expression is 0, the value is considered dynamic an can be
+chnged by the programm. If Expression is not 0, it is considered a constant that
+will not change during the programm.
+
+TODO: Improve documentation as my understanding grows.")
+
+(def-mmix-description 'LOCAL
+  :call "LOCAL Register"
+  :category 'assembler-directive
+  :type 'pseudo-op
+  :name "ensure local"
+  :description "Ensure that Register will be a local register.
+
+This ensures that  the Register will be  a local register in  the programm. When
+assembling, MMIXAL will  report an error if  the final value of  the `G' counter
+does not exceed all register numbers that are declared local in this way.
+
+For more information, see the `L' and `G' counters.")
+
+(def-mmix-description 'BSPEC
+  :call "BSPEC Expression"
+  :category 'assembler-directive
+  :type 'pseudo-op
+  :name "begin special mode"
+  :description "Begins special mode.
+
+The Expression should have  a value that fits in two bytes.  See also `ESPEC' to
+end the special mode.")
+
+(def-mmix-description 'ESPEC
+  :call "ESPEC"
+  :category 'assembler-directive
+  :type 'pseudo-op
+  :name "end special mode"
+  :description "Ends special mode.
+
+See also `BSPEC'.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Allocating Data
+;;
+
 (def-mmix-description 'BYTE
   :call "Label BYTE ExpressionList"
   :category'allocate-data
@@ -178,89 +230,6 @@ nonempty, Label  becomes a name for  the allocated address.  Then  assemble each
 expression  in ExpressionList  as a  eight-byte  value and  advance the  current
 location by 8n if there are n expressions.  Any or all of the expressions may be
 future references.")
-
-(def-mmix-description 'GREG
-  :call "Label GREG Expression"
-  :category 'assembler-directive
-  :type 'pseudo-op
-  :name "global register"
-  :description "Allocate a new global register.
-
-Set aside a new global register  containing the value Expression. Label can then
-be used  as the name  for this  register. A commonly  used expression is  @ (the
-current location). If Expression is 0, the value is considered dynamic an can be
-chnged by the programm. If Expression is not 0, it is considered a constant that
-will not change during the programm.
-
-TODO: Improve documentation as my understanding grows.")
-
-(def-mmix-description 'LOCAL
-  :call "LOCAL Register"
-  :category 'assembler-directive
-  :type 'pseudo-op
-  :name "ensure local"
-  :description "Ensure that Register will be a local register.
-
-This ensures that  the Register will be  a local register in  the programm. When
-assembling, MMIXAL will  report an error if  the final value of  the `G' counter
-does not exceed all register numbers that are declared local in this way.
-
-For more information, see the `L' and `G' counters.")
-
-(def-mmix-description 'BSPEC
-  :call "BSPEC Expression"
-  :category 'assembler-directive
-  :type 'pseudo-op
-  :name "begin special mode"
-  :description "Begins special mode.
-
-The Expression should have  a value that fits in two bytes.  See also `ESPEC' to
-end the special mode.")
-
-(def-mmix-description 'ESPEC
-  :call "ESPEC"
-  :category 'assembler-directive
-  :type 'pseudo-op
-  :name "end special mode"
-  :description "Ends special mode.
-
-See also `BSPEC'.")
-
-(def-mmix-description 'MUL
-  :call "MUL $X,$Y,$Z|Z"
-  :category 'integer-arithmetic
-  :type 'op
-  :name "multiply"
-  :description "$X becomes the signed product of $Y by $Z|Z.
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; Allocating Data
-;;
-
-The  contens of  of register  X  becomes the  signed  product of  the number  in
-register Y  and the  number in  register Z or  the unsigned  byte Z.  An integer
-overﬂow exception  can occur, as  with ADD  or SUB, if  the result is  less than
-−2^63 or greater than 2^63 − 1.
-
-Immediate multiplication by powers  of 2 can be done more  rapidly with the `SL'
-instruction."
-  :hex "#18")
-
-(def-mmix-description 'MULU
-  :call "MUL $X,$Y,$Z|Z"
-  :category 'integer-arithmetic
-  :type 'op
-  :name "multiply unsigned"
-  :description "$X becomes the product of the lower 64 bits of $Y by $Z|Z.
-
-The lower  64 bits  of the  unsigned 128-bit  product of  register Y  and either
-register Z or  Z are placed in register  X, and the upper 64 bits  are placed in
-the special himult register rH.
-
-Immediate multiplication by  powers of 2 can  be done more rapidly  with the SLU
-instruction, if the  upper half is not needed. Furthermore,  an instruction like
-4ADDU $X,$Y,$Y is faster than MULU $X,$Y,5."
-  :hex "#1A")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -394,14 +363,127 @@ equivalent to SETL $X,Y.")
   :description "16-bit unsigned YZ is shifted left by 48 bits and set into register X."
   :hex "#E0")
 
+(def-mmix-description 'GETA
+  :call "GETA $X,Label"
+  :category 'setting-register
+  :type 'op
+  :name "get address"
+  :description "Compute a relative address and move the result into $X.
+
+The value λ  + 4YZ or λ  + 4(YZ − 2^16)  is placed in register  X. (The assembly
+language conventions  of branch  instructions apply. For  example, we  can write
+GETA $X,Addr.)"
+  :hex "#F4")
+
+(def-mmix-description 'PUT
+  :call "PUT X,$Z|Z"
+  :category 'setting-register
+  :type 'op
+  :name "put into special register"
+  :description "Put Z into the special register X.
+
+The special register identiﬁed  by X is set to the contents of  register Z or to
+the unsigned byte Z itself.
+
+Some changes are not allowed:
+  * Bits of rA that are always zero must remain zero;
+  * the leading  seven bytes  of rG  and rL must  remain zero,  and rL  must not
+    exceed rG;
+  * special registers 9–11 (namely rN, rO, and rS) must not change;
+  * special registers 8 and  12–18 (namely rC, rI, rK, rQ, rT,  rU, rV, and rTT)
+    can be changed only if the privilege bit of rK is zero;
+  * and certain  bits of rQ  (depending on  available hardware) might  not allow
+    software to  change them from  0 to  1. Moreover, any  bits of rQ  that have
+    changed from 0 to  1 since the most recent GET x,rQ will  remain 1 after PUT
+    rQ,z.
+The PUT command will  not increase rL; it sets rL to the  minimum of the current
+value and the new value.  (A program should say SETL $99,0 instead of PUT rL,100
+when rL is known to be less than 100.)
+
+Impermissible PUT  commands cause an  illegal instruction interrupt, or  (in the
+case of rC, rI, rK, rQ, rT, rU, rV, and rTT) a privileged operation interrupt."
+  :hex "#F6")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Integer Arithmetic
 ;;
+
+(def-mmix-description 'MUL
+  :call "MUL $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "multiply"
+  :description "$X becomes the signed product of $Y by $Z|Z.
+
+The  contens of  of register  X  becomes the  signed  product of  the number  in
+register Y  and the  number in  register Z or  the unsigned  byte Z.  An integer
+overﬂow exception  can occur, as  with ADD  or SUB, if  the result is  less than
+−2^63 or greater than 2^63 − 1.
+
+Immediate multiplication by powers  of 2 can be done more  rapidly with the `SL'
+instruction."
+  :hex "#18")
+
+(def-mmix-description 'MULU
+  :call "MUL $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "multiply unsigned"
+  :description "$X becomes the product of the lower 64 bits of $Y by $Z|Z.
+
+The lower  64 bits  of the  unsigned 128-bit  product of  register Y  and either
+register Z or  Z are placed in register  X, and the upper 64 bits  are placed in
+the special himult register rH.
+
+Immediate multiplication by  powers of 2 can  be done more rapidly  with the SLU
+instruction, if the  upper half is not needed. Furthermore,  an instruction like
+4ADDU $X,$Y,$Y is faster than MULU $X,$Y,5."
+  :hex "#1A")
+
+(def-mmix-description 'DIV
+  :call "DIV $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "divide"
+  :description "$X becomes the signed quotient of $Y and $Z|Z.
+
+The signed quotient of the number in  register Y divided by either the number in
+register Z or the  unsigned byte Z replaces the contents of  register X, and the
+signed remainder is placed in the special remainder register rR.
+
+* If the divisor is zero, an integer divide check exception occurs. In that case
+  $X is set to zero and rR is set to $Y.
+
+* If  the  number  −2^63  is  divided   by  −1,  an  integer  overﬂow  exception
+  occurs. Otherwise integer overﬂow is impossible."
+  :hex "#1C")
+
+(def-mmix-description 'DIVU
+  :call "DIVU $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "divide unsigned"
+  :description "$X becomes the quotient of prefixing rD to $Y and $Z|Z.
+
+The unsigned 128-bit  number obtained by preﬁxing the  special dividend register
+rD to  the contents of register  Y is divided  either by the unsigned  number in
+register Z  or by the unsigned  byte Z, and  the quotient is placed  in register
+X. The remainder is placed in the remainder register rR.
+
+* If  rD is  greater than  or equal  to the  divisor (and  in particular  if the
+  divisor is zero), then $X is set to rD and rR is set to $Y.
+
+* Unsigned arithmetic never signals an exceptional condition, even when dividing
+  by zero."
+  :hex "#1E")
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Bitwise Operations
 ;;
+
 
 (def-mmix-description 'ORH
   :call "ORH $X,YZ"
@@ -478,17 +560,7 @@ for overﬂow is made."
 ;; Floating Point Arithmetic
 ;;
 
-(def-mmix-description 'GETA
-  :call "GETA $X,Label"
-  :category 'setting-register
-  :type 'op
-  :name "get address"
-  :description "Compute a relative address and move the result into $X.
 
-The value λ  + 4YZ or λ  + 4(YZ − 2^16)  is placed in register  X. (The assembly
-language conventions  of branch  instructions apply. For  example, we  can write
-GETA $X,Addr.)"
-  :hex "#F4")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Jumps and Branches
@@ -515,34 +587,6 @@ the GO instruciton can be used.
 ;; Subroutines
 ;;
 
-(def-mmix-description 'PUT
-  :call "PUT X,$Z|Z"
-  :category 'setting-register
-  :type 'op
-  :name "put into special register"
-  :description "Put Z into the special register X.
-
-The special register identiﬁed  by X is set to the contents of  register Z or to
-the unsigned byte Z itself.
-
-Some changes are not allowed:
-  * Bits of rA that are always zero must remain zero;
-  * the leading  seven bytes  of rG  and rL must  remain zero,  and rL  must not
-    exceed rG;
-  * special registers 9–11 (namely rN, rO, and rS) must not change;
-  * special registers 8 and  12–18 (namely rC, rI, rK, rQ, rT,  rU, rV, and rTT)
-    can be changed only if the privilege bit of rK is zero;
-  * and certain  bits of rQ  (depending on  available hardware) might  not allow
-    software to  change them from  0 to  1. Moreover, any  bits of rQ  that have
-    changed from 0 to  1 since the most recent GET x,rQ will  remain 1 after PUT
-    rQ,z.
-The PUT command will  not increase rL; it sets rL to the  minimum of the current
-value and the new value.  (A program should say SETL $99,0 instead of PUT rL,100
-when rL is known to be less than 100.)
-
-Impermissible PUT  commands cause an  illegal instruction interrupt, or  (in the
-case of rC, rI, rK, rQ, rT, rU, rV, and rTT) a privileged operation interrupt."
-  :hex "#F6")
 
 (def-mmix-description 'PUSHJ
   :call "PUSHJ $X,Label"
@@ -763,6 +807,7 @@ See also `TRIP' and `RESUME'."
 ;;
 ;; Code
 ;;
+
 
 (defun mmix-description-symbol-name (description)
   "Return DESCRIPTION's symbol as a string."
