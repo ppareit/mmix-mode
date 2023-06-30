@@ -538,6 +538,75 @@ case of rC, rI, rK, rQ, rT, rU, rV, and rTT) a privileged operation interrupt."
 ;; Integer Arithmetic
 ;;
 
+(def-mmix-description 'ADD
+  :call "ADD $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "add"
+  :description "$X becomes the signed sum of $Y and $Z|Z.
+
+The contents of register X becomes the signed sum of the number in register Y
+and the number in register Z or the unsigned byte Z. An integer overflow
+exception can occur, as with MUL or SUB, if the result is less than -2^63 or
+greater than 2^63 − 1."
+  :hex "#20")
+
+(def-mmix-description 'ADDU
+  :call "ADDU $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "add unsigned"
+  :description "$X becomes the unsigned sum of $Y and $Z|Z.
+
+The contents of register X becomes ($Y + $Z) mod 2^64 or ($Y + Z) mod 2^64. This
+instruction will not trigger an overflow exception. Overflow could be detected
+by using the command CMPU ovflo, $X, $Y."
+  :hex "#22")
+
+(def-mmix-description '2ADDU
+  :call "2ADDU $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "times 2 and add unsigned"
+  :description "$X becomes the unsigned sum of 2$Y and $Z|Z.
+
+The sum (2$Y + $Z) mod 2^64 or (2$Y + Z) mod 2^64 is placed into register X.
+This instruction will not trigger an overflow exception."
+  :hex "#28")
+
+(def-mmix-description '4ADDU
+  :call "4ADDU $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "times 4 and add unsigned"
+  :description "$X becomes the unsigned sum of 4$Y and $Z|Z.
+
+The sum (4$Y + $Z) mod 2^64 or (4$Y + Z) mod 2^64 is placed into register X.
+This instruction will not trigger an overflow exception."
+  :hex "#2A")
+
+(def-mmix-description '8ADDU
+  :call "8ADDU $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "times 8 and add unsigned"
+  :description "$X becomes the unsigned sum of 8$Y and $Z|Z.
+
+The sum (8$Y + $Z) mod 2^64 or (8$Y + Z) mod 2^64 is placed into register X.
+This instruction will not trigger an overflow exception."
+  :hex "#2C")
+
+(def-mmix-description '16ADDU
+  :call "16ADDU $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "times 16 and add unsigned"
+  :description "$X becomes the unsigned sum of 16$Y and $Z|Z.
+
+The sum (16$Y + $Z) mod 2^64 or (16$Y + Z) mod 2^64 is placed into register X.
+This instruction will not trigger an overflow exception."
+  :hex "#2E")
+
 (def-mmix-description 'MUL
   :call "MUL $X,$Y,$Z|Z"
   :category 'integer-arithmetic
