@@ -480,6 +480,18 @@ equivalent to SETL $X,Y.")
   :description "16-bit unsigned YZ is shifted left by 48 bits and set into register X."
   :hex "#E0")
 
+(def-mmix-description 'GET
+  :call "GET $X,rZ"
+  :category 'setting-register
+  :type 'op
+  :name "get from special register"
+  :description "Register X is set to the special register rZ.
+
+The value of special register rZ is placed in general register $X.
+
+  * An illegal instruction interrupt occurs if Z ≥ 32."
+  :hex "#FE")
+
 (def-mmix-description 'GETA
   :call "GETA $X,Label"
   :category 'setting-register
