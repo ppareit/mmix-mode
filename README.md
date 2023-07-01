@@ -56,8 +56,9 @@ Setting up mmix-mode with use-package
 
 (use-package mmix-describe
   :bind (:map mmix-mode-map
-	      ("C-h o" . mmix-describe)
-		  ("C-h r" . mmix-describe-registers)))
+              ("C-h o" . mmix-describe)
+              ("C-h r" . mmix-describe-registers)
+              ("C-h s" . mmix-summarize-instructions)))
 ```
 Evaluate the different s-expressions with `C-x C-e` or restart Emacs.
 
