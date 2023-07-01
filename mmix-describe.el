@@ -607,6 +607,57 @@ The sum (16$Y + $Z) mod 2^64 or (16$Y + Z) mod 2^64 is placed into register X.
 This instruction will not trigger an overflow exception."
   :hex "#2E")
 
+(def-mmix-description 'SUB
+  :call "SUB $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "subtract"
+  :description "$X becomes the signed difference of $Y and $Z|Z.
+
+The difference $Y - $Z or $Y - Z is placed into register X using signed, two’s
+complement arithmetic.
+
+*  An integer overflow exception occurs if the difference is >= 2^63 or < -2^63."
+  :hex "#24")
+
+(def-mmix-description 'SUBU
+  :call "SUBU $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "subtract unsigned"
+  :description "$X becomes the unsigned difference of $Y and $Z|Z.
+
+The difference ($Y - $Z) mod 2^64 or ($Y - Z) mod 2^64 is placed into register X.
+These two instructions are the same as SUB $X,$Y,$Z|Z except that no test for
+overflow is made."
+  :hex "#26")
+
+(def-mmix-description 'NEG
+  :call "NEG $X,Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "negate"
+  :description "$X becomes the value Y - $Z|Z is placed into register X.
+
+The value Y − $Z or Y − Z is placed into register X using signed, two’s complement
+arithmetic.
+
+*  An integer overflow exception occurs if the result is greater than 2^63 - 1.
+*  Notice that in this case MMIX works with the immediate constant Y,
+   not register Y."
+  :hex "#34")
+
+(def-mmix-description 'NEGU
+  :call "NEGU $X,Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "negate unsigned"
+  :description "$X becomes the value (Y - $Z|Z) mod 2^64.
+
+NEGU instructions are the same as NEG instructions, except that no test for
+overflow is made."
+  :hex "#36")
+
 (def-mmix-description 'MUL
   :call "MUL $X,$Y,$Z|Z"
   :category 'integer-arithmetic
