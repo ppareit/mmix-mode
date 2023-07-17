@@ -733,6 +733,122 @@ X. The remainder is placed in the remainder register rR.
 ;; Bitwise Operations
 ;;
 
+(def-mmix-description 'AND
+  :call "AND $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "bitwise and"
+  :description "Each bit of $Y is anded with the bit of $Z or Z, and is placed in $X.
+
+Each bit of register Y is logically anded with the corresponding bit of
+register Z or of the constant Z, and the result is placed in register X. In
+other words, a bit of register X is set to 1 if and only if the corresponding
+bits of the operands are both 1; in symbols, $X = $Y ∧ $Z or $X = $Y ∧ Z.
+This means in particular that AND $X,$Y,Z always zeroes out the seven most
+significant bytes of register X, because 0s are prefixed to the constant byte Z."
+  :hex "#C8")
+
+(def-mmix-description 'OR
+  :call "OR $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "bitwise or"
+  :description "Each bit of $Y is ored with the bit of $Z or Z, and is placed in $X.
+
+Each bit of register Y is logically ored with the corresponding bit of
+register Z or of the constant Z, and the result is placed in register X. In
+other words, a bit of register X is set to 0 if and only if the corresponding
+bits of the operands are both 0; in symbols, $X = $Y ∨ $Z or $X = $Y ∨ Z.
+In the special case Z = 0, the immediate variant of this command simply copies
+register Y to register X. The MMIX assembler allows us to write ‘SET $X,$Y’ as
+a convenient abbreviation for ‘OR $X,$Y,0’."
+  :hex "#C0")
+
+(def-mmix-description 'XOR
+  :call "XOR $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "bitwise exclusive-or"
+  :description "Each bit of $Y is xored with the bit of $Z or Z, and is placed in $X.
+
+Each bit of register Y is logically xored with the corresponding bit of
+register Z or of the constant Z, and the result is placed in register X. In
+other words, a bit of register X is set to 0 if and only if the corresponding
+bits of the operands are equal; in symbols, $X = $Y ⊕ $Z or $X = $Y ⊕ Z."
+  :hex "#C6")
+
+(def-mmix-description 'ANDN
+  :call "ANDN $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "bitwise and-not"
+  :description "$Y is anded with the complement of $Z or Z, and is placed in $X.
+
+Each bit of register Y is logically anded with the complement of the
+corresponding bit of register Z or of the constant Z, and the result is placed
+in register X. In other words, a bit of register X is set to 1 if and only if
+the corresponding bit of register Y is 1 and the other corresponding bit is 0;
+in symbols, $X = $Y \ $Z or $X = $Y \ Z. This is the logical difference
+operation; if the operands are bit strings representing sets, we are computing
+the elements that lie in one set but not the other."
+  :hex "#CA")
+
+(def-mmix-description 'ORN
+  :call "ORN $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "bitwise or-not"
+  :description "$Y is ored with the complement of $Z or Z, and is placed in $X.
+
+Each bit of register Y is logically ored with the complement of the
+corresponding bit of register Z or of the constant Z, and the result is placed
+in register X. In other words, a bit of register X is set to 1 if and only if
+the corresponding bit of register Y is greater than or equal to the other
+corresponding bit; in symbols, $X = $Y ∨ ¬$Z or $X = $Y ∨ ¬Z. This is the
+complement of $Z \ $Y or Z \ $Y."
+  :hex "#C2")
+
+(def-mmix-description 'NAND
+  :call "NAND $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "bitwise not-and"
+  :description "$Y is anded with $Z or Z, and the complement is placed in $X.
+
+Each bit of register Y is logically anded with the corresponding bit of register
+Z or of the constant Z, and the complement of the result is placed in register
+X. In other words, a bit of register X is set to 0 if and only if the
+corresponding bits of the operands are both 1; in symbols, $X = ¬($Y ∧ $Z) or
+$X = ¬($Y ∧ Z)."
+  :hex "#CC")
+
+(def-mmix-description 'NXOR
+  :call "NXOR $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "bitwise not-exclusive-or"
+  :description "$Y is xored with $Z or Z, and the complement is placed in $X.
+
+Each bit of register Y is logically xored with the corresponding bit of register
+Z or of the constant Z, and the complement of the result is placed in register
+X. In other words, a bit of register X is set to 1 if and only if the
+corresponding bits of the operands are equal; in symbols, $X = ¬($Y ⊕ $Z) or
+$X = ¬($Y ⊕ Z)."
+  :hex "#CE")
+
+(def-mmix-description 'MUX
+  :call "MUX $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "bitwise multiplex"
+  :description "jth bit of $X is set to the jth bit of $Y or $Z|Z, depending on mask rM.
+
+For each bit position j, the jth bit of register X is set either to bit j of
+register Y or to bit j of the other operand, $Z or Z, depending on whether bit j
+of the special mask register rM is 1 or 0. If the jth bit of rM is 1, the jth
+bit of $X is set to the jth bit of $Y, else it is set to the jth bit of $Z or
+Z. In symbols, $X = ($Y ∧ rM) ∨ ($Z ∧ rM) or $X = ($Y ∧ rM) ∨ (Z ∧ rM)."
+  :hex "#D8")
 
 (def-mmix-description 'ORH
   :call "ORH $X,YZ"
