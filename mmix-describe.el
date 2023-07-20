@@ -920,6 +920,36 @@ unsigned numbers. The SLU instructions are equivalent to SL, except that no test
 for overﬂow is made."
   :hex "#3A")
 
+(def-mmix-description 'SR
+  :call "SR $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "shift right"
+  :description "The bits of Y are shifted right by $Z or Z places and placed in X.
+
+The bits of register Y are shifted right by $Z or Z places, and copies of the
+leftmost bit (the sign bit) are shifted in from the left. The result is placed
+in register X. Register Y is treated as a signed number, but the second operand
+is treated as an unsigned number. The effect is the same as division by 2 $Z or
+by 2Z and rounding down. In particular, if the second operand is 64 or more,
+register X will become zero if $Y was nonnegative, -1 if $Y was negative."
+  :hex "#3C")
+
+(def-mmix-description 'SRU
+  :call "SRU $X,$Y,$Z|Z"
+  :category 'bitwise-operation
+  :type 'op
+  :name "shift right unsigned"
+  :description "The bits of Y are shifted right by $Z or Z places and placed in X.
+
+The bits of register Y are shifted right by $Z or Z places, and 0s are shifted
+in from the left. The result is placed in register X. Both operands are treated
+as unsigned numbers. The effect is the same as unsigned division of a 64-bit
+number by 2^$Z or by 2^Z. If the second operand is 64 or more, register X will
+become entirely zero."
+  :hex "#3E")
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Floating Point Arithmetic
