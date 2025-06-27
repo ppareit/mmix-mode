@@ -44,6 +44,8 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'flycheck))
+
 (defgroup mmix-mode nil
   "Options for `mmix-mode'."
   :group 'languages)
