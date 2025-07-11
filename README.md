@@ -20,47 +20,54 @@ Here are some of the features of `mmix-mode`:
 Installing
 ============
 
-I'll assume a manual installation for now. If this package becomes
-available in MELPA, let me know, I'll update the installation notes.
-I advice you to create a directory in your `.emacs.d` configuration,
-and then clone this project there.
-
-``` bash
-mkdir ~/.emacs.d/lisp-gits/
-cd ~/.emacs.d/lisp-gits/
-git clone git@github.com:ppareit/mmix-mode.git
-```
+The recommended way to install `mmix-mode` is with [`straight.el`](https://github.com/radian-software/straight.el),
+a package manager for Emacs that can install packages directly from
+their repositories.
 
 Dependencies
 ---------------
 
-This mode depends on the MMIX binaries:
+This mode depends on the MMIX binaries. Make sure they are installed and
+available in your system's `PATH`.
 
 * [MMIX Home Page](http://mmix.cs.hm.edu/)
 * [Linux Binaries](http://mmix.cs.hm.edu/bin/index.html)
 * [Windows Executables](http://mmix.cs.hm.edu/exe/index.html)
 * [MAC OSX Executables](http://mmix.cs.hm.edu/osx/index.html)
 
-Setting up mmix-mode with use-package
+Configuration
 ---------------------------------------------
 
-``` emacs-lisp
+The following example shows how to configure `mmix-mode` using `use-package`.
+`straight.el` integrates with `use-package` and will automatically
+clone the `mmix-mode` repository.
+
+```emacs-lisp
+;; `mmix-mode` is the main mode for working with mmix files
 (use-package mmix-mode
-  :load-path "/home/ppareit/.emacs.d/lisp-gits/mmix-mode/"
-  :config
-  (add-hook 'mmix-mode-hook #'flycheck-mode)
-  (add-hook 'mmix-mode-hook
-	    (lambda () (setq-local flycheck-highlighting-mode nil))))
+  :straight (mmix-mode :type git :host github :repo "ppareit/mmix-mode")
+  :hook ((mmix-mode . flycheck-mode)
+         (mmix-mode . (lambda () (setq-local flycheck-highlighting-mode nil)))))
 
-(use-package mmo-mode)
+;; `mmo-mode` is included in the same repository.
+;; It is autoloaded for files with the .mmo extension.
+;; No extra configuration is needed.
+(use-package mmo-mode
+  :ensure nil
+  :after mmix-mode)
 
+;; `mmix-describe` is also in the same repository. We bind its functions
+;; in `mmix-mode-map`.
 (use-package mmix-describe
+  :ensure nil
+  :after mmix-mode
   :bind (:map mmix-mode-map
-              ("C-h o" . mmix-describe)
-              ("C-h r" . mmix-describe-registers)
-              ("C-h s" . mmix-summarize-instructions)))
+         ("C-h o" . mmix-describe)
+         ("C-h r" . mmix-describe-registers)
+         ("C-h s" . mmix-summarize-instructions)))
 ```
-Evaluate the different s-expressions with `C-x C-e` or restart Emacs.
+After adding this to your Emacs configuration, `mmix-mode` will be installed
+automatically when you restart Emacs or evaluate the code with `C-x C-e`.
 
 Using `mmix-mode`
 ==============================
