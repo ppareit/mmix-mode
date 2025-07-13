@@ -675,7 +675,7 @@ instruction."
   :hex "#18")
 
 (def-mmix-description 'MULU
-  :call "MUL $X,$Y,$Z|Z"
+  :call "MULU $X,$Y,$Z|Z"
   :category 'integer-arithmetic
   :type 'op
   :name "multiply unsigned"
