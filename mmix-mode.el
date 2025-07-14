@@ -217,6 +217,28 @@ pseudo op."
 			(line-beginning-position)
 			t)))
 
+(defun mmix-get-buffer-symbols ()
+  "Return a list of user-defined symbols in the current buffer.
+
+The symbols we are after are the symbols that can be used in an expression
+in the rest of the mmix code.  So we don't collect local labels like 1H, 2H,
+etc. In the documentation a symbol in MMIXAL is any sequence of letters and
+digits, beginning with a letter.  A colon ‘:’ or underscore symbol ‘_’ is
+regarded as a letter."
+  (let ((symbols '())
+        (ops-re (regexp-opt mmix-ops-and-pseudo-ops 'symbols)))
+    (save-excursion
+      (goto-char (point-min))
+      (while (not (eobp))
+        (beginning-of-line)
+        (let ((word (first-word-of-line)))
+          (when (and word
+                     (string-match-p "^[a-zA-Z:_]" word)
+                     (not (string-match-case-sensitive-p ops-re word)))
+            (push word symbols)))
+        (forward-line 1)))
+    (delete-dups symbols)))
+
 (defun mmix-completion-at-point ()
   "Function to use in the hook `completion-at-point-functions'."
   (let* ((bounds (bounds-of-thing-at-point 'symbol))
@@ -224,7 +246,7 @@ pseudo op."
 	 (end (if bounds (cdr bounds) (point)))
 	 (collection (cond ((mmix-at-label-p) mmix-label-completitions)
 			   ((mmix-at-op-p) mmix-ops-and-pseudo-ops)
-			   ((mmix-at-expr-p) mmix-globals))))
+			   ((mmix-at-expr-p) (append mmix-globals (mmix-get-buffer-symbols))))))
 	(list start end collection . nil)))
 
 ;; Keywords for Syntax-Highlighting
