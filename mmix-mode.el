@@ -113,7 +113,7 @@ provide special information about a symbolic program, without
 being instructions of the program itself."))
 
 (eval-and-compile
-  (defconst mmix-ops
+  (defconst mmix-real-ops
     '("TRAP" "FCMP" "FUN" "FEQL" "FADD" "FIX" "FSUB" "FIXU"
       "FLOT" "FLOTU" "SFLOT" "SFLOTU"
       "FMUL" "FCMPE" "FUNE" "FEQLE" "FDIV" "FSQRT" "FREM" "FINT"
@@ -155,12 +155,16 @@ Operation codes of MMIX, short the op codes."))
     "Alias operation codes of `mmix-mode'.
 Alias operations are alternate names for MMIX operations whose
 standard names are inappropriate in certain contexts. They are
-handled in the same way as the `mmix-ops'."))
+handled in the same way as the `mmix-real-ops'."))
+
+(eval-and-compile
+  (defconst mmix-ops (append mmix-real-ops mmix-alias-ops)
+    "All operation codes of `mmix-mode', including aliases."))
 
 (eval-and-compile
   (defconst mmix-ops-and-pseudo-ops
-    (append mmix-ops mmix-pseudo-ops mmix-alias-ops)
-    "Ops, pseudo ops and aliases that start with a tab.
+    (append mmix-ops mmix-pseudo-ops)
+    "Ops and pseudo ops that start with a tab.
 This list is needed in `mmix-indent-line' and
 `mmix-completion-at-point'."))
 
@@ -224,6 +228,36 @@ pseudo op."
 			(line-beginning-position)
 			t)))
 
+(defun mmix-get-buffer-equates ()
+  "Return a list of user-defined equates in the current buffer.
+
+Equates are symbols that are defined using a pseudo-op.  I don't want
+to call them variables, as they do not get assigned, they are purely
+an assembler-time value, not storage."
+  (let ((equates '())
+        (pseudo-ops-re (regexp-opt mmix-pseudo-ops 'words)))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward
+              (concat "^\\([a-zA-Z:_][a-zA-Z0-9:_]*\\)[ \t]+" pseudo-ops-re)
+              nil t)
+        (push (match-string-no-properties 1) equates)))
+    (delete-dups equates)))
+
+(defun mmix-get-buffer-labels ()
+  "Return a list of user-defined labels in the current buffer.
+
+Labels are symbols at the beginning of a line that are not equates."
+  (let ((labels '())
+        (ops-re (regexp-opt mmix-ops 'symbols)))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward
+	      (concat "^\\([a-zA-Z:_][a-zA-Z0-9:_]*\\)[ \t]+" ops-re)
+	      nil t)
+        (push (match-string-no-properties 1) labels)))
+    (delete-dups labels)))
+
 (defun mmix-get-buffer-symbols ()
   "Return a list of user-defined symbols in the current buffer.
 
@@ -232,19 +266,30 @@ in the rest of the mmix code.  So we don't collect local labels like 1H, 2H,
 etc. In the documentation a symbol in MMIXAL is any sequence of letters and
 digits, beginning with a letter.  A colon ‘:’ or underscore symbol ‘_’ is
 regarded as a letter."
-  (let ((symbols '())
-        (ops-re (regexp-opt mmix-ops-and-pseudo-ops 'symbols)))
-    (save-excursion
-      (goto-char (point-min))
-      (while (not (eobp))
-        (beginning-of-line)
-        (let ((word (first-word-of-line)))
-          (when (and word
-                     (string-match-p "^[a-zA-Z:_]" word)
-                     (not (string-match-case-sensitive-p ops-re word)))
-            (push word symbols)))
-        (forward-line 1)))
-    (delete-dups symbols)))
+  (delete-dups (append (mmix-get-buffer-labels)
+                       (mmix-get-buffer-equates))))
+
+(defconst mmix-font-lock-equates-re
+  (concat "^\\([A-Za-z:_][A-Za-z0-9:_]*\\)[ \t]+"
+	  (regexp-opt mmix-pseudo-ops 'words)))
+
+(defconst mmix-font-lock-labels-re
+  (concat "^\\([A-Za-z:_][A-Za-z0-9:_]*\\)[ \t]+"
+	  (regexp-opt mmix-ops 'words)))
+
+
+;; Keywords for Syntax-Highlighting
+(defconst mmix-font-lock-keywords
+  `(("%.*\\|\*.*\\|?.*" . 'font-lock-comment-face)
+    (,mmix-font-lock-equates-re 1 'font-lock-variable-name-face)
+    (,mmix-font-lock-labels-re 1 'font-lock-function-name-face)
+    (,(regexp-opt mmix-special-registers 'words) . 'font-lock-type-face)
+    (,(regexp-opt mmix-pseudo-ops 'words) . 'font-lock-preprocessor-face)
+    (,(regexp-opt mmix-ops 'words) . 'font-lock-builtin-face)
+    (,(regexp-opt mmix-globals 'words) . 'font-lock-constant-face)
+    (,(regexp-opt mmix-functions 'words) . 'font-lock-function-name-face)
+   )
+  "Additional expressions to highlight in MMIX mode.")
 
 (defun mmix-completion-at-point ()
   "Function to use in the hook `completion-at-point-functions'."
@@ -255,18 +300,6 @@ regarded as a letter."
 			   ((mmix-at-op-p) mmix-ops-and-pseudo-ops)
 			   ((mmix-at-expr-p) (append mmix-globals (mmix-get-buffer-symbols))))))
 	(list start end collection . nil)))
-
-;; Keywords for Syntax-Highlighting
-(defconst mmix-font-lock-keywords
-  `(("%.*\\|\*.*\\|?.*" . 'font-lock-comment-face)
-    (,(regexp-opt mmix-special-registers 'words) . 'font-lock-type-face)
-    (,(regexp-opt mmix-pseudo-ops 'words) . 'font-lock-preprocessor-face)
-    (,(regexp-opt mmix-alias-ops 'words) . 'font-lock-builtin-face)
-    (,(regexp-opt mmix-ops 'words) . 'font-lock-builtin-face)
-    (,(regexp-opt mmix-globals 'words) . 'font-lock-constant-face)
-    (,(regexp-opt mmix-functions 'words) . 'font-lock-function-name-face)
-   )
-  "Additional expressions to highlight in MMIX mode.")
 
 (defun mmix-indent-line ()
   "Indent current line as MMIXAL code.
