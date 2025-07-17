@@ -165,6 +165,13 @@ This list is needed in `mmix-indent-line' and
 `mmix-completion-at-point'."))
 
 (eval-and-compile
+  (defconst mmix-special-registers
+    '("rA" "rB" "rC" "rD" "rE" "rF" "rG" "rH" "rI" "rJ" "rK" "rL" "rM"
+      "rN" "rO" "rP" "rQ" "rR" "rS" "rT" "rU" "rV" "rW" "rX" "rY" "rZ"
+      "rBB" "rTT" "rWW" "rXX" "rYY" "rZZ")
+    "Special-purpose registers in MMIX."))
+
+(eval-and-compile
   (defconst mmix-globals
     '("ROUND_CURRENT" "ROUND_OFF" "ROUND_UP" "ROUND_DOWN" "ROUND_NEAR"
       "Inf"
@@ -252,6 +259,7 @@ regarded as a letter."
 ;; Keywords for Syntax-Highlighting
 (defconst mmix-font-lock-keywords
   `(("%.*\\|\*.*\\|?.*" . 'font-lock-comment-face)
+    (,(regexp-opt mmix-special-registers 'words) . 'font-lock-type-face)
     (,(regexp-opt mmix-pseudo-ops 'words) . 'font-lock-preprocessor-face)
     (,(regexp-opt mmix-alias-ops 'words) . 'font-lock-builtin-face)
     (,(regexp-opt mmix-ops 'words) . 'font-lock-builtin-face)
