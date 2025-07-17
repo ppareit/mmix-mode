@@ -1,4 +1,4 @@
-;;; mmo-mode.el --- Major mode for viewing MMIX object code
+;;; mmo-mode.el --- Major mode for viewing MMIX object code.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 - 2022 Pieter Pareit <pieter.pareit@gmail.com>
 

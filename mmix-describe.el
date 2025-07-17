@@ -1,4 +1,4 @@
-;;; mmix-describe.el --- Major mode for MMIX assambly code
+;;; mmix-describe.el --- Help mode for MMIX.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 - 2022 Pieter Pareit <pieter.pareit@gmail.com>
 

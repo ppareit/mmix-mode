@@ -1,4 +1,4 @@
-;;; mmix-mode.el --- Major mode for MMIX assambly code
+;;; mmix-mode.el --- Major mode for MMIX assambly code.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 - 2022 Pieter Pareit <pieter.pareit@gmail.com>
 
