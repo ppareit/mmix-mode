@@ -435,15 +435,18 @@ Register $X is stored into bytes M8[$Y+$Z] or M8[$Y+Z]."
 Identical to STO $X,$Y,$Z|Z."
   :hex "#AE")
 
-(def-mmix-description 'STCO
-  :call "STCO $X,$Y,$Z|Z"
+(def-mmix-description 'STSF
+  :call "STSF $X,$Y,$Z|Z"
   :category 'storing-data
   :type 'op
-  :name "store constant octabyte"
-  :description "An octabyte whose value is unsigned byte $X is stored into M8[$Y+$Z|Z].
+  :name "store short float"
+  :description "The short float in $X is stored into M4[$Y+$Z|Z].
 
-An octabyte whose value is the unsigned byte $X is stored into M8[$Y+$Z] or M8[$Y+Z]."
-  :hex "#B4")
+The short-float contents of register $X, rounded to a 32-bit floating point, is stored
+into the four bytes beginning at address M[$Y + $Z] or M[$Y + Z]. Rounding is done
+with the current rounding mode. Floating overflow, underflow and inexact exceptions
+might occur."
+  :hex "#B0")
 
 (def-mmix-description 'STHT
   :call "STHT $X,$Y,$Z|Z"
@@ -454,6 +457,26 @@ An octabyte whose value is the unsigned byte $X is stored into M8[$Y+$Z] or M8[$
 
 The most significant four bytes of register $X are stored into M4[$Y+$Z] or M4[$Y+Z]."
   :hex "#B2")
+
+(def-mmix-description 'STCO
+  :call "STCO $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store constant octabyte"
+  :description "An octabyte whose value is unsigned byte $X is stored into M8[$Y+$Z|Z].
+
+An octabyte whose value is the unsigned byte $X is stored into M8[$Y+$Z] or M8[$Y+Z]."
+  :hex "#B4")
+
+(def-mmix-description 'STUNC
+  :call "STUNC $X,$Y,$Z|Z"
+  :category 'storing-data
+  :type 'op
+  :name "store octa uncached"
+  :description "$X is stored into M8[$Y+$Z|Z], uncached.
+
+This instruction is otherwise identical to STO."
+  :hex "#BE")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -607,6 +630,28 @@ The sum (16$Y + $Z) mod 2^64 or (16$Y + Z) mod 2^64 is placed into register X.
 This instruction will not trigger an overflow exception."
   :hex "#2E")
 
+(def-mmix-description 'CMP
+  :call "CMP $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "compare"
+  :description "Set $X to -1|0|+1, depending on the signed comparison of $Y and $Z|Z.
+
+The contents of register X is set to -1 if $Y < $Z, 0 if $Y = $Z, and +1 if
+$Y > $Z. The comparison is performed on signed 64-bit values."
+  :hex "#30")
+
+(def-mmix-description 'CMPU
+  :call "CMPU $X,$Y,$Z|Z"
+  :category 'integer-arithmetic
+  :type 'op
+  :name "compare unsigned"
+  :description "Set $X to -1|0|+1, depending on the unsigned comparison of $Y and $Z|Z.
+
+The contents of register X is set to -1 if $Y < $Z, 0 if $Y = $Z, and +1 if
+$Y > $Z. The comparison is performed on unsigned 64-bit values."
+  :hex "#32")
+
 (def-mmix-description 'SUB
   :call "SUB $X,$Y,$Z|Z"
   :category 'integer-arithmetic
@@ -738,7 +783,7 @@ X. The remainder is placed in the remainder register rR.
   :category 'bitwise-operation
   :type 'op
   :name "bitwise and"
-  :description "Each bit of $Y is anded with the bit of $Z or Z, and is placed in $X.
+  :description "Each bit of $Y is anded with the bit of $Z|Z and is placed in $X.
 
 Each bit of register Y is logically anded with the corresponding bit of
 register Z or of the constant Z, and the result is placed in register X. In
@@ -753,7 +798,7 @@ significant bytes of register X, because 0s are prefixed to the constant byte Z.
   :category 'bitwise-operation
   :type 'op
   :name "bitwise or"
-  :description "Each bit of $Y is ored with the bit of $Z or Z, and is placed in $X.
+  :description "Each bit of $Y is ored with the bit of $Z|Z, and is placed in $X.
 
 Each bit of register Y is logically ored with the corresponding bit of
 register Z or of the constant Z, and the result is placed in register X. In
@@ -769,7 +814,7 @@ a convenient abbreviation for ‘OR $X,$Y,0’."
   :category 'bitwise-operation
   :type 'op
   :name "bitwise exclusive-or"
-  :description "Each bit of $Y is xored with the bit of $Z or Z, and is placed in $X.
+  :description "Each bit of $Y is xored with the bit of $Z|Z, and is placed in $X.
 
 Each bit of register Y is logically xored with the corresponding bit of
 register Z or of the constant Z, and the result is placed in register X. In
@@ -841,7 +886,7 @@ $X = ¬($Y ⊕ Z)."
   :category 'bitwise-operation
   :type 'op
   :name "bitwise multiplex"
-  :description "jth bit of $X is set to the jth bit of $Y or $Z|Z, depending on mask rM.
+  :description "Set jth bit of $X to jth bit of $Y or $Z|Z, depending on mask rM.
 
 For each bit position j, the jth bit of register X is set either to bit j of
 register Y or to bit j of the other operand, $Z or Z, depending on whether bit j
@@ -973,9 +1018,112 @@ A  JMP command  treats bytes  X, Y,  and Z  as an  unsigned 24-bit  integer XYZ,
 usually computer by the assembler. It  allows a program to transfer control from
 location λ to any location between λ  − 67,108,864 and λ + 67,108,860 inclusive,
 using relative addressing  as in the B  and PB commands. For  even bigger jumps,
-the GO instruciton can be used.
-"
+the GO instruction can be used."
   :hex "#F0")
+
+(def-mmix-description 'BN
+  :call "BN $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if negative"
+  :description "Branch to Label if register $X is negative.
+
+The signed contents of register $X is tested. If it is negative, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol."
+  :hex "#40")
+
+(def-mmix-description 'BZ
+  :call "BZ $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if zero"
+  :description "Branch to Label if register $X is zero.
+
+The signed contents of register $X is tested. If it is zero, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol."
+  :hex "#42")
+
+(def-mmix-description 'BP
+  :call "BP $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if positive"
+  :description "Branch to Label if register $X is positive.
+
+The signed contents of register $X is tested. If it is positive (and not zero),
+the program jumps to the address specified by Label. The assembler computes the
+necessary relative offset to the Label from the current instruction's location,
+which can be referenced with the '@' symbol."
+  :hex "#44")
+
+(def-mmix-description 'BOD
+  :call "BOD $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if odd"
+  :description "Branch to Label if register $X is odd.
+
+The signed contents of register $X is tested. If it is odd, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol."
+  :hex "#46")
+
+(def-mmix-description 'BNN
+  :call "BNN $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if non-negative"
+  :description "Branch to Label if register $X is non-negative.
+
+The signed contents of register $X is tested. If it is non-negative (zero or
+positive), the program jumps to the address specified by Label. The assembler
+computes the necessary relative offset to the Label from the current
+instruction's location, which can be referenced with the '@' symbol."
+  :hex "#48")
+
+(def-mmix-description 'BNZ
+  :call "BNZ $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if non-zero"
+  :description "Branch to Label if register $X is non-zero.
+
+The signed contents of register $X is tested. If it is not zero, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol."
+  :hex "#4a")
+
+(def-mmix-description 'BNP
+  :call "BNP $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if non-positive"
+  :description "Branch to Label if register $X is non-positive.
+
+The signed contents of register $X is tested. If it is non-positive (zero or negative),
+the program jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol."
+  :hex "#4c")
+
+(def-mmix-description 'BEV
+  :call "BEV $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if even"
+  :description "Branch to Label if register $X is even.
+
+The signed contents of register $X is tested. If it is even, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol."
+  :hex "#4e")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1031,6 +1179,25 @@ operating system kernel. For example:
   * TRAP 0,Halt,0 is typically written to make the main programm end.
 See also `TRIP' and `RESUME'."
   :hex "#00")
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; The mode authors favorite
+;;
+
+(def-mmix-description 'SWYM
+  :call "SWYM X,Y,Z"
+  :category 'other
+  :type 'op
+  :name "sympathize with your machinery"
+  :description "This instruction does nothing.
+
+The X, Y, and Z fields are ignored. Its purpose is to let a programmer express
+sympathy for the machinery, which might be working too hard. On a pipelined
+implementation, it might briefly give the machine a chance to catch up. A `SWYM`
+can also be used as a breakpoint that is easy to spot."
+  :hex "#FD")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
