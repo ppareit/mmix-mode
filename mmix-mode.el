@@ -97,6 +97,7 @@ This option is used in `mmix-compile-command' and
   (define-key mmix-mode-map "\C-c\C-c" 'compile)
   (define-key mmix-mode-map "\C-c\C-r" 'mmix-run)
   (define-key mmix-mode-map "\C-c\C-o" 'mmix-open-object-file-in-other-window)
+  (define-key mmix-mode-map (kbd "TAB") 'mmix-smart-tab)
   )
 
 ;(makunbound 'mmix-mode-map)
@@ -289,6 +290,26 @@ regarded as a letter."
    )
   "Additional expressions to highlight in MMIX mode.")
 
+(defun get-all-completions-at-point ()
+  "Return a list of all possible completions for the text at point.
+
+The function consults the first *applicable* entry in
+`completion-at-point-functions'.  It does **not** modify the
+buffer, it simply returns a list of completion strings."
+  (when-let* ((capf-data (run-hook-with-args-until-success
+			  'completion-at-point-functions)))
+    ;; A CAPF returns (BEGIN END COLLECTION . PROPS)
+    (cl-destructuring-bind (beg end collection &rest props) capf-data
+      (let* ((typed     (buffer-substring-no-properties beg end))
+             (predicate (plist-get props :predicate)))
+        ;; `all-completions' gives a plain list of strings (no annotations)
+        (all-completions typed collection predicate)))))
+
+(defun mmix-symbol-at-point-is-a-completion-p ()
+  "Return t if the symbol at point is in the list of completions."
+  (when-let ((symbol (thing-at-point 'symbol)))
+    (member symbol (get-all-completions-at-point))))
+
 (defun mmix-completion-at-point ()
   "Function to use in the hook `completion-at-point-functions'."
   (let* ((bounds (bounds-of-thing-at-point 'symbol))
@@ -309,10 +330,40 @@ The indenting for mmixal works as follows:
   (interactive)
   (if (line-empty-p)
       (indent-line-to 8)
-    (if (string-match-case-sensitive-p (regexp-opt mmix-ops-and-pseudo-ops 'symbols)
-				       (first-word-of-line))
-	(indent-line-to 8)
-      (indent-line-to 0))))
+    (save-excursion
+      (if (string-match-case-sensitive-p (regexp-opt mmix-ops-and-pseudo-ops 'symbols)
+					 (first-word-of-line))
+	  (indent-line-to 8)
+	(indent-line-to 0)))))
+
+(defun mmix-smart-tab ()
+  "Smart TAB for `mmix-mode'.
+
+Behaviour, in order:
+  1. If the line is *empty*          =>  indent or jump back to left
+  2. If text at point can *complete* =>  run completion
+  3. Otherwise                       => indent the line first,
+                                        then insert  TAB at the
+                                        position where point originally was.
+If we are at the begining of a symbol, only indent, don't put TAB there."
+  (interactive)
+  (cond
+   ((line-empty-p)
+    (indent-line-to (if (= (current-column) 8)
+			0
+		      8)))
+   ((null (bounds-of-thing-at-point 'symbol))
+    (mmix-indent-line)
+    (insert "\t"))
+   ((mmix-symbol-at-point-is-a-completion-p)
+    (mmix-indent-line)
+    (unless (looking-at-p "\\_<")
+      (insert "\t")))
+   ((get-all-completions-at-point)
+          (completion-at-point))
+   (t (mmix-indent-line)
+        (insert "\t"))))
+
 
 (defun string-match-case-sensitive-p (regexp string)
   "Same as `string-match-p' but the search is case-sensitive.

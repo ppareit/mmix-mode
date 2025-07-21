@@ -46,8 +46,16 @@ clone the `mmix-mode` repository.
 ;; `mmix-mode` is the main mode for working with mmix files
 (use-package mmix-mode
   :straight (mmix-mode :type git :host github :repo "ppareit/mmix-mode")
+  :config
+  (setq mmix-mmixal-expand-flag t)
+         ;; if you want flycheck support, enable it here
   :hook ((mmix-mode . flycheck-mode)
-         (mmix-mode . (lambda () (setq-local flycheck-highlighting-mode nil)))))
+         ;; default flycheck is highlighting the whole line, setting to nil
+         ;; will now only mark in the fringe, wich works best in mmix
+         (mmix-mode . (lambda () (setq-local flycheck-highlighting-mode nil))))
+  :bind (:map mmix-mode-map
+         ;; example setting custom key binding, remove if not needed
+         ("M-SPC" . company-complete-common)))
 
 ;; `mmo-mode` is included in the same repository.
 ;; It is autoloaded for files with the .mmo extension.
