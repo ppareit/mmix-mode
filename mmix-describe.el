@@ -81,7 +81,9 @@ REST are the properties."
     (loading-data . "Loading data")
     (storing-data . "Storing data")
     (setting-register . "Setting register")
+    (immediate-wyde . "Immediate Wyde Instructions")
     (integer-arithmetic . "Integer arithmetic")
+    (conditional-instructions . "Conditional instructions")
     (bitwise-operation . "Bitwise operation")
     (floating-point-arithmetic . "Floating point arithmetic")
     (jump . "Jump")
@@ -139,8 +141,8 @@ Often the  Expression is
 Set aside a new global register  containing the value Expression. Label can then
 be used  as the name  for this  register. A commonly  used expression is  @ (the
 current location). If Expression is 0, the value is considered dynamic an can be
-chnged by the programm. If Expression is not 0, it is considered a constant that
-will not change during the programm.
+changed  by the programm.  If Expression  is not 0, it is  considered a constant
+that will not change during the programm.
 
 TODO: Improve documentation as my understanding grows.")
 
@@ -495,14 +497,6 @@ The case in which SET $X,$Y is equivalent  to OR $X,$Y,0 and sets the register X
 to  register Y.  The case  in  which SET  $X,Y (thus  Y  is not  a register)  is
 equivalent to SETL $X,Y.")
 
-(def-mmix-description 'SETH
-  :call "SETH $X,YZ"
-  :category 'setting-register
-  :type 'op
-  :name "set to high wyde"
-  :description "16-bit unsigned YZ is shifted left by 48 bits and set into register X."
-  :hex "#E0")
-
 (def-mmix-description 'GET
   :call "GET $X,rZ"
   :category 'setting-register
@@ -555,6 +549,161 @@ when rL is known to be less than 100.)
 Impermissible PUT  commands cause an  illegal instruction interrupt, or  (in the
 case of rC, rI, rK, rQ, rT, rU, rV, and rTT) a privileged operation interrupt."
   :hex "#F6")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Immediate Wyde Instructions
+;;
+
+(def-mmix-description 'SETH
+  :call "SETH $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "set to high wyde"
+  :description "16-bit unsigned YZ is shifted left by 48 bits and set into register X."
+  :hex "#E0")
+
+(def-mmix-description 'SETMH
+  :call "SETMH $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "set to medium high wyde"
+  :description "16-bit unsigned YZ is shifted left by 32 bits and set into register X."
+  :hex "#E1")
+
+(def-mmix-description 'SETML
+  :call "SETML $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "set to medium low wyde"
+  :description "16-bit unsigned YZ is shifted left by 16 bits and set into register X."
+  :hex "#E2")
+
+(def-mmix-description 'SETL
+  :call "SETL $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "set to low wyde"
+  :description "16-bit unsigned YZ is placed into register X."
+  :hex "#E3")
+
+(def-mmix-description 'INCH
+  :call "INCH $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "increment by high wyde"
+  :description "16-bit unsigned YZ is shifted left by 48 bits and added to register X."
+  :hex "#E4")
+
+(def-mmix-description 'INCMH
+  :call "INCMH $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "increment by medium high wyde"
+  :description "16-bit unsigned YZ is shifted left by 32 bits and added to register X."
+  :hex "#E5")
+
+(def-mmix-description 'INCML
+  :call "INCML $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "increment by medium low wyde"
+  :description "16-bit unsigned YZ is shifted left by 16 bits and added to register X."
+  :hex "#E6")
+
+(def-mmix-description 'INCL
+  :call "INCL $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "increment by low wyde"
+  :description "16-bit unsigned YZ is added to register X."
+  :hex "#E7")
+
+(def-mmix-description 'ORH
+  :call "ORH $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "bitwise or with high wyde"
+  :description "16-bit unsigned YZ is shifted left by 48 bits and is ored with X.
+
+The 16-bit unsigned number YZ is shifted left by 48 bits, and ored with register
+X. The result is placed into register X."
+  :hex "#E8")
+
+(def-mmix-description 'ORMH
+  :call "ORMH $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "bitwise or with medium high wyde"
+  :description "16-bit unsigned YZ is shifted left by 32 bits and is ored with X.
+
+The 16-bit unsigned number YZ is shifted left by 32 bits, and ored with register
+X. The result is placed into register X."
+  :hex "#E9")
+
+(def-mmix-description 'ORML
+  :call "ORML $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "bitwise or with medium low wyde"
+  :description "16-bit unsigned YZ is shifted left by 16 bits and is ored with X.
+
+The 16-bit unsigned number YZ is shifted left by 16 bits, and ored with register
+X. The result is placed into register X."
+  :hex "#EA")
+
+(def-mmix-description 'ORL
+  :call "ORL $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "bitwise or with low wyde"
+  :description "16-bit unsigned YZ is ored with register X and placed in X."
+  :hex "#EB")
+
+(def-mmix-description 'ANDNH
+  :call "ANDNH $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "bitwise and-not with high wyde"
+  :description "Shift YZ left by 48 bits, then complement and then AND with $X.
+
+The 16-bit unsigned number YZ is shifted left by 48 bits, then complemented and
+is ANDed with register X. The result is placed into register X."
+  :hex "#EC")
+
+(def-mmix-description 'ANDNMH
+  :call "ANDNMH $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "bitwise and-not with medium high wyde"
+  :description "Shift YZ left by 32 bits, then complement and then AND with $X.
+
+The 16-bit unsigned number YZ is shifted left by 32 bits, then complemented and
+is ANDed with register X. The result is placed into register X."
+  :hex "#ED")
+
+(def-mmix-description 'ANDNML
+  :call "ANDNML $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "bitwise and-not with medium low wyde"
+  :description "Shift YZ left by 16 bits, then complement and then AND with $X.
+
+The 16-bit unsigned number YZ is shifted left by 16 bits, then complemented and
+is ANDed with register X. The result is placed into register X."
+  :hex "#EE")
+
+(def-mmix-description 'ANDNL
+  :call "ANDNL $X,YZ"
+  :category 'immediate-wyde
+  :type 'op
+  :name "bitwise and-not with low wyde"
+  :description "Complement YZ and then AND with $X.
+
+The 16-bit unsigned number YZ is complemented and is ANDed with register X. The
+result is placed into register X."
+  :hex "#EF")
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -682,7 +831,10 @@ overflow is made."
   :category 'integer-arithmetic
   :type 'op
   :name "negate"
-  :description "$X becomes the value Y - $Z|Z is placed into register X.
+  :description "$X becomes the value Y - $Z|Z.
+
+Y is a nonnegative constant, usually zero. If Y has the value zero, it can be
+omitted.
 
 The value Y − $Z or Y − Z is placed into register X using signed, two’s complement
 arithmetic.
@@ -698,6 +850,9 @@ arithmetic.
   :type 'op
   :name "negate unsigned"
   :description "$X becomes the value (Y - $Z|Z) mod 2^64.
+
+Y is a nonnegative constant, usually zero. If Y has the value zero, it can be
+omitted.
 
 NEGU instructions are the same as NEG instructions, except that no test for
 overflow is made."
@@ -772,6 +927,101 @@ X. The remainder is placed in the remainder register rR.
   by zero."
   :hex "#1E")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Conditional Instructions
+;;
+
+(def-mmix-description 'CSN
+  :call "CSN $X,$Y,$Z|Z"
+  :category 'conditional-instructions
+  :type 'op
+  :name "conditionally set if negative"
+  :description "$X is set to $Z|Z if $Y is negative.
+
+If register Y is negative (namely if its most significant bit is 1), register X
+is set to the contents of register Z or to the unsigned immediate value Z.
+Otherwise nothing happens."
+  :hex "#60")
+
+(def-mmix-description 'CSZ
+  :call "CSZ $X,$Y,$Z|Z"
+  :category 'conditional-instructions
+  :type 'op
+  :name "conditionally set if zero"
+  :description "$X is set to $Z|Z if $Y is zero.
+
+If register Y is zero, register X is set to the contents of register Z or to
+the unsigned immediate value Z. Otherwise nothing happens."
+  :hex "#62")
+
+(def-mmix-description 'CSP
+  :call "CSP $X,$Y,$Z|Z"
+  :category 'conditional-instructions
+  :type 'op
+  :name "conditionally set if positive"
+  :description "$X is set to $Z|Z if $Y is positive.
+
+If register Y is positive (and not zero), register X is set to the contents of
+register Z or to the unsigned immediate value Z. Otherwise nothing happens."
+  :hex "#64")
+
+(def-mmix-description 'CSOD
+  :call "CSOD $X,$Y,$Z|Z"
+  :category 'conditional-instructions
+  :type 'op
+  :name "conditionally set if odd"
+  :description "$X is set to $Z|Z if $Y is odd.
+
+If register Y is odd, register X is set to the contents of register Z or to the
+unsigned immediate value Z. Otherwise nothing happens."
+  :hex "#66")
+
+(def-mmix-description 'CSNN
+  :call "CSNN $X,$Y,$Z|Z"
+  :category 'conditional-instructions
+  :type 'op
+  :name "conditionally set if non-negative"
+  :description "$X is set to $Z|Z if $Y is non-negative.
+
+If register Y is non-negative (zero or positive), register X is set to the
+contents of register Z or to the unsigned immediate value Z. Otherwise nothing
+happens."
+  :hex "#68")
+
+(def-mmix-description 'CSNZ
+  :call "CSNZ $X,$Y,$Z|Z"
+  :category 'conditional-instructions
+  :type 'op
+  :name "conditionally set if non-zero"
+  :description "$X is set to $Z|Z if $Y is non-zero.
+
+If register Y is non-zero, register X is set to the contents of register Z or
+to the unsigned immediate value Z. Otherwise nothing happens."
+  :hex "#6a")
+
+(def-mmix-description 'CSNP
+  :call "CSNP $X,$Y,$Z|Z"
+  :category 'conditional-instructions
+  :type 'op
+  :name "conditionally set if non-positive"
+  :description "$X is set to $Z|Z if $Y is non-positive.
+
+If register Y is non-positive (zero or negative), register X is set to the
+contents of register Z or to the unsigned immediate value Z. Otherwise nothing
+happens."
+  :hex "#6c")
+
+(def-mmix-description 'CSEV
+  :call "CSEV $X,$Y,$Z|Z"
+  :category 'conditional-instructions
+  :type 'op
+  :name "conditionally set if even"
+  :description "$X is set to $Z|Z if $Y is even.
+
+If register Y is even, register X is set to the contents of register Z or to
+the unsigned immediate value Z. Otherwise nothing happens."
+  :hex "#6e")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -894,47 +1144,6 @@ of the special mask register rM is 1 or 0. If the jth bit of rM is 1, the jth
 bit of $X is set to the jth bit of $Y, else it is set to the jth bit of $Z or
 Z. In symbols, $X = ($Y ∧ rM) ∨ ($Z ∧ rM) or $X = ($Y ∧ rM) ∨ (Z ∧ rM)."
   :hex "#D8")
-
-(def-mmix-description 'ORH
-  :call "ORH $X,YZ"
-  :category 'bitwise-operation
-  :type 'op
-  :name "bitwise or with high wyde"
-  :description "16-bit unsigned YZ is shifted left by 48 bits and is ored with X.
-
-The 16-bit unsigned number YZ is shifted left by 48 bits, and ored with register
-X. The result is placed into register X."
-  :hex "#E8")
-
-(def-mmix-description 'ORMH
-  :call "ORMH $X,YZ"
-  :category 'bitwise-operation
-  :type 'op
-  :name "bitwise or with medium high wyde"
-  :description "16-bit unsigned YZ is shifted left by 32 bits and is ored with X.
-
-The 16-bit unsigned number YZ is shifted left by 32 bits, and ored with register
-X. The result is placed into register X."
-  :hex "#E9")
-
-(def-mmix-description 'ORML
-  :call "ORML $X,YZ"
-  :category 'bitwise-operation
-  :type 'op
-  :name "bitwise or with medium low wyde"
-  :description "16-bit unsigned YZ is shifted left by 16 bits and is ored with X.
-
-The 16-bit unsigned number YZ is shifted left by 16 bits, and ored with register
-X. The result is placed into register X."
-  :hex "#EA")
-
-(def-mmix-description 'ORL
-  :call "ORL $X,YZ"
-  :category 'bitwise-operation
-  :type 'op
-  :name "bitwise or with low wyde"
-  :description "16-bit unsigned YZ is ored with register X and placed in X."
-  :hex "#EB")
 
 (def-mmix-description 'SL
   :call "SL $X,$Y,$Z|Z"
@@ -1106,10 +1315,10 @@ can be referenced with the '@' symbol."
   :name "branch if non-positive"
   :description "Branch to Label if register $X is non-positive.
 
-The signed contents of register $X is tested. If it is non-positive (zero or negative),
-the program jumps to the address specified by Label. The assembler computes the necessary
-relative offset to the Label from the current instruction's location, which
-can be referenced with the '@' symbol."
+The signed contents of register $X is tested. If it is non-positive (zero or
+negative), the program jumps to the address specified by Label. The assembler
+computes the necessary relative offset to the Label from the current
+instruction's location, which can be referenced with the '@' symbol."
   :hex "#4c")
 
 (def-mmix-description 'BEV
@@ -1124,6 +1333,126 @@ jumps to the address specified by Label. The assembler computes the necessary
 relative offset to the Label from the current instruction's location, which
 can be referenced with the '@' symbol."
   :hex "#4e")
+
+(def-mmix-description 'PBN
+  :call "PBN $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if negative, predicted taken"
+  :description "Branch to Label if register $X is negative (predicted taken).
+
+The signed contents of register $X is tested. If it is negative, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol.
+
+This instruction also hints to the processor that the branch is likely to be taken."
+  :hex "#50")
+
+(def-mmix-description 'PBZ
+  :call "PBZ $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if zero, predicted taken"
+  :description "Branch to Label if register $X is zero (predicted taken).
+
+The signed contents of register $X is tested. If it is zero, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol.
+
+This instruction also hints to the processor that the branch is likely to be taken."
+  :hex "#52")
+
+(def-mmix-description 'PBP
+  :call "PBP $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if positive, predicted taken"
+  :description "Branch to Label if register $X is positive (predicted taken).
+
+The signed contents of register $X is tested. If it is positive (and not zero),
+the program jumps to the address specified by Label. The assembler computes the
+necessary relative offset to the Label from the current instruction's location,
+which can be referenced with the '@' symbol.
+
+This instruction also hints to the processor that the branch is likely to be taken."
+  :hex "#54")
+
+(def-mmix-description 'PBOD
+  :call "PBOD $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if odd, predicted taken"
+  :description "Branch to Label if register $X is odd (predicted taken).
+
+The signed contents of register $X is tested. If it is odd, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol.
+
+This instruction also hints to the processor that the branch is likely to be taken."
+  :hex "#56")
+
+(def-mmix-description 'PBNN
+  :call "PBNN $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if non-negative, predicted taken"
+  :description "Branch to Label if register $X is non-negative (predicted taken).
+
+The signed contents of register $X is tested. If it is non-negative (zero or
+positive), the program jumps to the address specified by Label. The assembler
+computes the necessary relative offset to the Label from the current
+instruction's location, which can be referenced with the '@' symbol.
+
+This instruction also hints to the processor that the branch is likely to be taken."
+  :hex "#58")
+
+(def-mmix-description 'PBNZ
+  :call "PBNZ $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if non-zero, predicted taken"
+  :description "Branch to Label if register $X is non-zero (predicted taken).
+
+The signed contents of register $X is tested. If it is not zero, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol.
+
+This instruction also hints to the processor that the branch is likely to be taken."
+  :hex "#5a")
+
+(def-mmix-description 'PBNP
+  :call "PBNP $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if non-positive, predicted taken"
+  :description "Branch to Label if register $X is non-positive (predicted taken).
+
+The signed contents of register $X is tested. If it is non-positive (zero or negative),
+the program jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol.
+
+This instruction also hints to the processor that the branch is likely to be taken."
+  :hex "#5c")
+
+(def-mmix-description 'PBEV
+  :call "PBEV $X,Label"
+  :category 'branch
+  :type 'op
+  :name "branch if even, predicted taken"
+  :description "Branch to Label if register $X is even (predicted taken).
+
+The signed contents of register $X is tested. If it is even, the program
+jumps to the address specified by Label. The assembler computes the necessary
+relative offset to the Label from the current instruction's location, which
+can be referenced with the '@' symbol.
+
+This instruction also hints to the processor that the branch is likely to be taken."
+  :hex "#5e")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
