@@ -89,6 +89,11 @@ this mode.
   to start inserting opcodes. If you wish to start at the label
   position, see the next command.
 
+* `TAB` (`mmix-smart-tab`)
+
+  This key will indent, complete symbol or insert tab depending on the
+  current context.
+
 * `C-j` (`electric-newline-and-maybe-indent`)
 
   This key will move to a new line and indent. As the line is empty
