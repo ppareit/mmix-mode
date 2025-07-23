@@ -37,8 +37,6 @@
 ;;; Todo's and resources:
 ;; Usefull summary of instructions list:
 ;;       https://www-cs-faculty.stanford.edu/~knuth/mmop.html
-;; We can improve on the usage of comments:
-;;       https://sourceware.org/binutils/docs/as/MMIX_002dChars.html
 ;; We can use named registers:
 ;;       https://sourceware.org/binutils/docs/as/MMIX_002dRegs.html
 
@@ -83,6 +81,11 @@ This option is used in `mmix-compile-command' and
 (unless mmix-mode-syntax-table
   (setq mmix-mode-syntax-table (make-syntax-table))
   (modify-syntax-entry ?# "w")
+  (modify-syntax-entry ?* ".")
+  (modify-syntax-entry ?\; ".")
+  (modify-syntax-entry ?% ".")
+  (modify-syntax-entry ?! ".")
+  (modify-syntax-entry ?\n ">")
   )
 
 (defvar mmix-mode-abbrev-table nil
@@ -276,12 +279,55 @@ regarded as a letter."
   (concat "^\\([A-Za-z:_][A-Za-z0-9:_]*\\)[ \t]+"
 	  (regexp-opt mmix-ops 'words)))
 
+(defun mmix--comment-matcher (limit)
+  "Search forward for the first MMIXAL end‑of‑expression comment before LIMIT.
 
-;; Keywords for Syntax-Highlighting
-(defconst mmix-font-lock-keywords
-  `(("%.*\\|\*.*\\|?.*" . 'font-lock-comment-face)
+We set the match data for the comment and return t, nil otherwise.
+Our matcher finds comment in these cases:
+
+  LABEL  OPCODE  EXPR   comment
+         OPCODE  EXPR   comment
+
+We also handle the case of instructions separated by ;."
+  (let ((ops-re
+         ;; Build  \"\\<OP1\\|OP2\\|…\\>\"   ourself as emacs does not like (?:
+         (concat "\\<"
+                 (mapconcat #'identity mmix-ops-and-pseudo-ops "\\|")
+                 "\\>")))
+    (when (re-search-forward
+	   (rx bol
+               (* blank)
+               ;;optional label
+               (opt (group (regexp "[A-Za-z0-9:_]+")) (+ blank))
+               ;; opcode + expression
+               (regexp ops-re) (+ blank)
+	       ;; expression
+               (regexp "[^ \t\n;]+")
+               ;; posible ";LBL OP  EXPR” blocks
+               (* (seq ";"
+		       (opt (regexp "[A-Za-z0-9:_]+")) (+ blank)
+                       (regexp ops-re) (+ blank)
+                       (regexp "[^ \t\n;]+")))
+               ;; delimiter blanks
+               (+ blank)
+               ;; the comment
+               (group (* nonl))
+               eol)
+           limit t)
+      (set-match-data (list (match-beginning 2) (match-end 2)))
+      t)))
+
+(defconst mmix-font-lock-defaults
+  `(;; special comment matcher, to match comments after expressions
+    (mmix--comment-matcher . font-lock-comment-face)
+    ;; # and * at the beginning of a line is a comment.
+    ;; (also comment starters are ! and %, see syntax table)
+    ("^\\s-*#.*" . 'font-lock-comment-face)
+    ("^\\s-*\\*.*" . 'font-lock-comment-face)
+    ;; equates and labels are matched in 1
     (,mmix-font-lock-equates-re 1 'font-lock-variable-name-face)
     (,mmix-font-lock-labels-re 1 'font-lock-function-name-face)
+    ;; rest is normal matched
     (,(regexp-opt mmix-special-registers 'words) . 'font-lock-type-face)
     (,(regexp-opt mmix-pseudo-ops 'words) . 'font-lock-preprocessor-face)
     (,(regexp-opt mmix-ops 'words) . 'font-lock-builtin-face)
@@ -429,17 +475,30 @@ This assumes that the file has already been compiled."
 		(cmd (format "%s %s" mmix-mmix-program object-file-name)))
 	   (shell-command cmd)))))
 
+(defun mmix--syntax-propertize (start end)
+  "Give % and ! comment syntax only at bol (after optional blanks).
+
+START and END are given as parameters to `syntax-propertize-rules'."
+  (goto-char start)
+  (funcall
+   (syntax-propertize-rules
+    ;; ‑‑ group 1 gets the syntax “<” (comment‑start)
+    ("^[ \t]*\\([%!]\\)" (1 "<")))
+   start end))
+
+
 ;;;###autoload
 (define-derived-mode mmix-mode  prog-mode  "MMIX"
   "Major mode for editing MMIXAL assembly programs.
 This mode depends on the `mmix' and `mmixal' binaries, see the
 MMIX Home Page at the URL ‘http://mmix.cs.hm.edu/’."
   :group 'mmix-mode
-  :syntax-table nil ;mmix-mode-syntax-table
+  :syntax-table mmix-mode-syntax-table
   :abbrev-table mmix-mode-abbrev-table
   :keymap mmix-mode-map
   (setq-local comment-start "% ")
-  (setq-local font-lock-defaults '(mmix-font-lock-keywords))
+  (setq-local font-lock-defaults '(mmix-font-lock-defaults nil))
+  (setq-local syntax-propertize-function #'mmix--syntax-propertize)
   (setq-local comment-column 32)
   (setq-local compile-command (mmix-compile-command))
   (setq-local indent-line-function #'mmix-indent-line)
