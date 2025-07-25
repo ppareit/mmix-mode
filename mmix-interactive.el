@@ -1,0 +1,332 @@
+;;; mmix-interactive.el --- MMIX interactive integration.  -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2025  Pieter Pareit  <pieter.pareit@gmail.com>
+
+;; This file is part of mmix-mode.el. See LICENSE for details.
+
+;; This program is free software; you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License as
+;; published by the Free Software Foundation; either version 2 of
+;; the License, or (at your option) any later version.
+
+;; This program is distributed in the hope that it will be
+;; useful, but WITHOUT ANY WARRANTY; without even the implied
+;; warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+;; PURPOSE.  See the GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public
+;; License along with this program; if not, write to the Free
+;; Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+;; MA 02111-1307 USA
+
+;; Keywords: MMIX, debugging, tools
+;; Version: 0.1
+;; Package-Requires: ((emacs "27.1"))
+
+;;; Commentary:
+;;
+;; This library lets you debug MMIX programs from inside Emacs using the
+;; reference simulator `mmix'.  It launches `mmix -i -l program.mmo' in a
+;; comint buffer, highlights the current instruction line in the
+;; corresponding .mms source and  allows breakpoints to be toggled with a
+;; mouse click in the left fringe.
+;;
+;; Quick start (with use-package):
+;;
+;;   (use-package mmix-interactive
+;;     :ensure nil
+;;     :commands (mmix-interactive-run)
+;;     :bind (:map mmix-mode-map
+;;   	           ("C-c C-r" . mmix-interactive-run)))
+;;
+;; Then press C-cC-r in a .mms buffer after assembling to .mmo to start
+;; debugging.
+
+;;; Todo:
+;;
+;; Lot of litle issues, multiple source files, lock debugging mms file
+;; better key bindings in mms file when in interactive run mode,
+;; register viewing, memory viewing, call stack viewing, ...
+
+;;; Code:
+
+(require 'comint)
+(require 'cl-lib)
+(require 'pulse)
+
+(eval-when-compile
+  (add-to-list 'load-path
+               (file-name-directory (or load-file-name ""))))
+(require 'mmix-mode)
+(require 'mmo-mode)
+
+(defgroup mmix-interactive nil
+  "Interactive MMIX debugger."
+  :group 'tools
+  :prefix "mmix-interactive-")
+
+(defcustom mmix-interactive-executable "mmix"
+  "Path to the MMIX simulator executable."
+  :type 'string
+  :group 'mmix-interactive)
+
+(defvar-local mmix--source-file nil
+  "Full pathname of the current MMIX source (.mms) file.")
+
+(defvar-local mmix--running-p nil
+  "Non-nil while program is executing (between prompts).")
+
+;;;;
+;;;; Overlay arrow support
+;;;;
+
+(defvar mmix--overlay-arrow-position nil
+  "Marker used by `mmix--goto-line-in-source' for the overlay arrow.")
+
+(defun mmix--goto-line-in-source (file line)
+  "Visit FILE, go to LINE, for stepping.
+
+We show an overlay arrow there, and momentarily pulse the line."
+  (when (and file line (integerp line) (> line 0))
+    ;; Load the buffer without selecting it
+    (let* ((buf (find-file-noselect file))
+           ;; Ensure it's visible so both arrow & pulse are rendered
+           (win (or (get-buffer-window buf)
+                    (display-buffer buf))))
+      (with-selected-window win
+        ;; Move point to the requested line
+        (goto-char (point-min))
+        (forward-line (1- line))
+        ;; Overlay arrow
+        (unless mmix--overlay-arrow-position
+          (setq mmix--overlay-arrow-position (make-marker)))
+        (set-marker mmix--overlay-arrow-position (point))
+        (setq-local overlay-arrow-position mmix--overlay-arrow-position)
+        (setq-local overlay-arrow-string "=>")
+        ;; Pulse highlight (momentary)
+        (pulse-momentary-highlight-region
+         (line-beginning-position)
+         (line-end-position))))))
+
+
+;;;;
+;;;; Process helpers
+;;;;
+
+(defun mmix--send-console-command (cmd)
+  "Send CMD plus newline to the current MMIX process."
+  (when-let* ((buf (get-buffer "*MMIX-Interactive*"))
+              (proc (get-buffer-process buf)))
+    (with-current-buffer buf
+      (goto-char (process-mark proc))
+      (insert cmd "\n")
+      (set-marker (process-mark proc) (point)))
+    (comint-send-string proc (concat cmd "\n"))))
+
+;;;;
+;;;; Breakpoints
+;;;;
+
+(defvar mmix--breakpoint-icon
+  (progn
+    (define-fringe-bitmap 'mmix-breakpoint
+      (vector #b00011100
+              #b00111110
+              #b01111111
+              #b01111111
+              #b01111111
+              #b01111111
+              #b00111110
+              #b00011100)
+      8 8 'center)
+    'mmix-breakpoint)
+  "Fringe bitmap used to show breakpoints.")
+
+(defvar mmix--breakpoint-face 'error
+  "Face used for breakpoint fringe bitmap.")
+
+(defvar mmix--breakpoints (make-hash-table :test #'equal)
+  "Hash table mapping file:line -> (overlay . address).")
+
+(defun mmix--address-for-line (file line)
+  "Return the address (as an integer) of the LINE.
+
+We use `mmotype' on FILE to get the corresponding address of the line."
+  (cl-assert (and (stringp file) (integerp line) (> line 0)))
+  (let* ((mmo-file (concat (file-name-sans-extension file) ".mmo"))
+         (cmd      (format "mmotype %s" (shell-quote-argument mmo-file)))
+         (current-src nil)
+         (re-full  (rx bol
+                       (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
+                       "(\"" (group (*? (not (any "\"")))) "\", line "
+                       (group (+ digit)) ")"))
+         (re-short (rx bol
+                       (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
+                       "(line " (group (+ digit)) ")")))
+    (when (file-exists-p mmo-file)
+      (with-temp-buffer
+        (insert (shell-command-to-string cmd))
+        (goto-char (point-min))
+        (catch 'addr
+          (while (not (eobp))
+            (cond
+             ((looking-at re-full)
+              (let ((addr (match-string 1))
+                    (src  (match-string 2))
+                    (ln   (string-to-number (match-string 3))))
+                (setq current-src src)
+                (when (and (= line ln)
+                           (string= (file-truename src)
+                                    (file-truename file)))
+                  (throw 'addr (string-to-number addr 16)))))
+             ((looking-at re-short)
+              (let ((addr (match-string 1))
+                    (ln   (string-to-number (match-string 2))))
+                (when (and current-src
+                           (= line ln)
+                           (string= (file-truename current-src)
+                                    (file-truename file)))
+                  (throw 'addr (string-to-number addr 16))))))
+            (forward-line 1))
+	  ;; No match, notify and return nil
+          (message "No MMIX instruction on line %d." line)
+          nil)))))
+
+
+(defun mmix-toggle-breakpoint-at-line (&optional pos)
+  "Toggle a breakpoint at POS (or current line)."
+  (interactive)
+  (save-excursion
+    (when pos (goto-char pos))
+    (let* ((file (buffer-file-name))
+           (line (line-number-at-pos))
+           (key (format "%s:%d" file line))
+           (bp (gethash key mmix--breakpoints)))
+      (if bp
+          ;; Remove breakpoint
+          (let ((ov (car bp)) (addr (cdr bp)))
+            (delete-overlay ov)
+            (remhash key mmix--breakpoints)
+            (when addr (mmix--send-console-command (format "br%x" addr)))
+            (message "Breakpoint removed at %s:%d (addr %x)"
+		     (file-name-nondirectory file)
+		     line
+		     addr))
+        ;; Add breakpoint
+        (when-let* ((addr (mmix--address-for-line file line))
+		    (ov (make-overlay (line-beginning-position)
+				      (line-beginning-position))))
+          (overlay-put ov 'before-string
+		       (propertize " " 'display
+				   `(left-fringe ,mmix--breakpoint-icon
+						 ,mmix--breakpoint-face)))
+          (puthash key (cons ov addr) mmix--breakpoints)
+          (mmix--send-console-command (format "bx%x" addr))
+          (message "Breakpoint set at %s:%d (addr %x)"
+		   (file-name-nondirectory file)
+		   line
+		   addr))))))
+
+(defun mmix-toggle-breakpoint-with-mouse (event)
+  "Toggle a breakpoint on the line that was clicked in the left fringe.
+
+EVENT is the mouse-click event supplied by Emacs."
+  (interactive "e")      ; e is the raw event
+  ;; Extract the position of the click without moving point
+  (let* ((posn  (event-start event))      ; (posn WINDOW AREA XY POS . etc)
+         (buf   (window-buffer (posn-window posn)))
+         (pos   (posn-point posn)))       ; buffer position
+    (with-current-buffer buf
+      (save-excursion
+        (goto-char pos)
+        (mmix-toggle-breakpoint-at-line pos)))))
+
+(defun mmix--set-initial-breakpoints (mms-file)
+  "Set breakpoints for MMS-FILE when starting a new session."
+  (when (and mms-file (file-exists-p mms-file))
+    (let ((mms-file-truename (file-truename mms-file)))
+      (maphash (lambda (key val)
+                 (when (string-match "\\(.*\\):[0-9]+$" key)
+                   (let* ((breakpoint-file (match-string 1 key))
+                          (addr (cdr val)))
+                     (when (and addr (file-exists-p breakpoint-file)
+                                (string= (file-truename breakpoint-file) mms-file-truename))
+                       (mmix--send-console-command (format "bx%x" addr))))))
+               mmix--breakpoints))))
+
+;;;;
+;;;; Major mode
+;;;;
+
+(defvar mmix-interactive-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map comint-mode-map)
+    ;; convenience bindings
+    (define-key map (kbd "C-c C-b") #'mmix-toggle-breakpoint-at-line)
+    map)
+  "Keymap for `mmix-interactive-mode'.")
+
+(define-derived-mode mmix-interactive-mode comint-mode "MMIX-Dbg"
+  "Major mode for interacting with the MMIX simulator."
+  :group 'mmix-interactive
+  (setq comint-prompt-regexp "^mmix> ")
+  (setq comint-use-prompt-regexp t)
+  (setq comint-prompt-read-only nil)
+  ;; Output filter
+  (add-hook 'comint-preoutput-filter-functions #'mmix--output-filter nil t))
+
+(defun mmix--output-filter (output)
+  "Process OUTPUT from MMIX, routing trace lines and updating UI.
+Returns text that should appear in the comint buffer."
+  (let ((lines (split-string output "\n"))
+        (result ""))
+    (dolist (ln lines)
+      (cond
+       ;; source line indicator from `mmix -i`: "line 42: ..."
+       ((string-match "^line \\([0-9]+\\):.*$" ln)
+        (let ((num (string-to-number (match-string 1 ln))))
+          (mmix--goto-line-in-source mmix--source-file num))
+	(setq result (concat result ln "\n")))
+       ;; prompt line indicates stop -> refresh registers
+       ((string-match "^mmix> *$" ln)
+        (setq mmix--running-p nil)
+        (setq result (concat result ln)))
+       ;; default: pass through
+       (t (setq result (concat result ln "\n")))))
+    result))
+
+;;;;
+;;;; User entry point
+;;;;
+
+;;;###autoload
+(defun mmix-interactive-run (mmo-file &optional source-file)
+  "Run MMIX debugger on MMO-FILE, optionally linking SOURCE-FILE (.mms)."
+  (interactive
+   (if (and (buffer-file-name) (string-match-p "\\.mms\\'" (buffer-file-name)))
+       (list (concat (file-name-sans-extension (buffer-file-name)) ".mmo")
+             (buffer-file-name))
+     (list (read-file-name "MMIX object to debug: " nil nil t
+                           (when buffer-file-name
+                             (concat (file-name-sans-extension buffer-file-name) ".mmo")))
+           (when buffer-file-name buffer-file-name))))
+  (let* ((buf (get-buffer-create "*MMIX-Interactive*"))
+         (mms-file (or source-file (concat (file-name-sans-extension mmo-file) ".mms"))))
+    (make-comint-in-buffer "MMIX" buf mmix-interactive-executable nil
+           "-i" "-l" mmo-file)
+    (with-current-buffer buf
+      (mmix-interactive-mode)
+      (setq mmix--source-file mms-file))
+    (mmix--set-initial-breakpoints mms-file)
+    (pop-to-buffer buf)))
+
+;;;;
+;;;; Source integration
+;;;;
+
+(with-eval-after-load 'mmix-mode
+  ;; Mouse binding in fringe
+  (define-key mmix-mode-map [left-fringe mouse-1] #'mmix-toggle-breakpoint-with-mouse))
+
+(provide 'mmix-interactive)
+;;; mmix-interactive.el ends here
