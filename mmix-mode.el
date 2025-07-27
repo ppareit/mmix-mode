@@ -439,13 +439,10 @@ Return the index of start of first match for REGEXP in STRING or nil."
 (defun mmix-compile-command ()
   "Create a compile command for this buffer.
 This assumes that the buffer already has a name."
-  (cond ((not buffer-file-name)
-	 (message "Error to set compile command: %s"
-		  "The file has to be saved at least once."))
-	((not (executable-find mmix-mmixal-program))
-	 (message "Error to set compile command: %s"
-		  (format "'%s' not found, see install instructions."
-		  mmix-mmixal-program))))
+  (or buffer-file-name
+      (user-error "The buffer must be saved in a file first"))
+  (or (executable-find mmix-mmixal-program)
+      (user-error "'%s' not found, see install instructions" mmix-mmixal-program))
   (format "%s %s %s"
 	  mmix-mmixal-program
 	  (if mmix-mmixal-expand-flag "-x" "")
@@ -466,14 +463,11 @@ If the optional F-NAME is not given, uses function `buffer-file-name'."
   "Run the mmix program in current buffer.
 This assumes that the file has already been compiled."
   (interactive)
-  (cond ((not (executable-find mmix-mmix-program))
-	 (message "Error to start vm: %s"
-		  (format "'%s' not found, see install instructions."
-			  mmix-mmix-program)))
-	(t
-	 (let* ((object-file-name (mmix-object-file-name buffer-file-name))
-		(cmd (format "%s %s" mmix-mmix-program object-file-name)))
-	   (shell-command cmd)))))
+  (or (executable-find mmix-mmix-program)
+      (user-error "Cannot run MMIX vm: %s not found" mmix-mmix-program))
+  (let* ((object-file-name (mmix-object-file-name buffer-file-name))
+	 (cmd (format "%s %s" mmix-mmix-program object-file-name)))
+    (shell-command cmd)))
 
 (defun mmix--syntax-propertize (start end)
   "Give % and ! comment syntax only at bol (after optional blanks).
@@ -482,7 +476,6 @@ START and END are given as parameters to `syntax-propertize-rules'."
   (goto-char start)
   (funcall
    (syntax-propertize-rules
-    ;; ‑‑ group 1 gets the syntax “<” (comment‑start)
     ("^[ \t]*\\([%!]\\)" (1 "<")))
    start end))
 
