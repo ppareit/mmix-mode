@@ -290,7 +290,7 @@ Our matcher finds comment in these cases:
 
 We also handle the case of instructions separated by ;."
   (let ((ops-re
-         ;; Build  \"\\<OP1\\|OP2\\|…\\>\"   ourself as emacs does not like (?:
+         ;; Build  <OP1|OP2|...>   ourself as emacs does not like (?:
          (concat "\\<"
                  (mapconcat #'identity mmix-ops-and-pseudo-ops "\\|")
                  "\\>")))
@@ -303,7 +303,7 @@ We also handle the case of instructions separated by ;."
                (regexp ops-re) (+ blank)
 	       ;; expression
                (regexp "[^ \t\n;]+")
-               ;; posible ";LBL OP  EXPR” blocks
+               ;; posible `;LBL OP  EXPR' blocks
                (* (seq ";"
 		       (opt (regexp "[A-Za-z0-9:_]+")) (+ blank)
                        (regexp ops-re) (+ blank)
@@ -440,7 +440,7 @@ Return the index of start of first match for REGEXP in STRING or nil."
   "Create a compile command for this buffer.
 This assumes that the buffer already has a name."
   (or buffer-file-name
-      (user-error "The buffer must be saved in a file first"))
+      (error "Error to set compile command: The file has to be saved at least once."))
   (or (executable-find mmix-mmixal-program)
       (user-error "'%s' not found, see install instructions" mmix-mmixal-program))
   (format "%s %s %s"
@@ -511,6 +511,15 @@ MMIX Home Page at the URL ‘http://mmix.cs.hm.edu/’."
 ;; if the user has flycheck enabled, load our mmix-flycheck
 (with-eval-after-load 'flycheck
   (require 'mmix-flycheck))
+
+;;;
+;;; Xref integration
+;;;
+
+;;;###autoload
+(with-eval-after-load 'mmix-mode
+  (require 'mmix-xref))
+
 
 (provide 'mmix-mode)
 
