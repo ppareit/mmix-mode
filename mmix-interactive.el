@@ -76,6 +76,12 @@
 (defvar-local mmix--running-p nil
   "Non-nil while program is executing (between prompts).")
 
+(defvar mmix--address-table (make-hash-table :test #'equal)
+  "Cache mapping truename:line -> address integer.")
+
+(defvar mmix--address-table-mtime nil
+  "Modification time of the .mmo file used to build `mmix--address-table'.")
+
 ;;;;
 ;;;; Overlay arrow support
 ;;;;
@@ -148,50 +154,53 @@ We show an overlay arrow there, and momentarily pulse the line."
 (defvar mmix--breakpoints (make-hash-table :test #'equal)
   "Hash table mapping file:line -> (overlay . address).")
 
+(defun mmix--build-address-table (mmo-file)
+  "Parse MMO-FILE with mmotype and fill `mmix--address-table'."
+  (clrhash mmix--address-table)
+  (let ((re-full  (rx bol
+                      (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
+                      "(\"" (group (*? (not (any "\"")))) "\", line "
+                      (group (+ digit)) ")"))
+        (re-short (rx bol
+                      (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
+                      "(line " (group (+ digit)) ")"))
+        (current-src nil))
+    (with-temp-buffer
+      (insert (shell-command-to-string
+               (format "mmotype %s" (shell-quote-argument mmo-file))))
+      (goto-char (point-min))
+      (while (not (eobp))
+        (cond
+         ((looking-at re-full)
+          (let ((addr  (match-string 1))
+                (src   (file-truename (match-string 2)))
+                (line  (match-string 3)))
+            (setq current-src src)
+            (puthash (format "%s:%s" src line)
+                     (string-to-number addr 16)
+                     mmix--address-table)))
+         ((looking-at re-short)
+          (let ((addr (match-string 1))
+                (line (match-string 2)))
+            (when current-src
+              (puthash (format "%s:%s" current-src line)
+                       (string-to-number addr 16)
+                       mmix--address-table)))))
+        (forward-line 1)))
+    (setq mmix--address-table-mtime
+          (file-attribute-modification-time (file-attributes mmo-file)))))
+
 (defun mmix--address-for-line (file line)
-  "Return the address (as an integer) of the LINE.
-
-We use `mmotype' on FILE to get the corresponding address of the line."
-  (cl-assert (and (stringp file) (integerp line) (> line 0)))
-  (let* ((mmo-file (concat (file-name-sans-extension file) ".mmo"))
-         (cmd      (format "mmotype %s" (shell-quote-argument mmo-file)))
-         (current-src nil)
-         (re-full  (rx bol
-                       (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
-                       "(\"" (group (*? (not (any "\"")))) "\", line "
-                       (group (+ digit)) ")"))
-         (re-short (rx bol
-                       (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
-                       "(line " (group (+ digit)) ")")))
-    (when (file-exists-p mmo-file)
-      (with-temp-buffer
-        (insert (shell-command-to-string cmd))
-        (goto-char (point-min))
-        (catch 'addr
-          (while (not (eobp))
-            (cond
-             ((looking-at re-full)
-              (let ((addr (match-string 1))
-                    (src  (match-string 2))
-                    (ln   (string-to-number (match-string 3))))
-                (setq current-src src)
-                (when (and (= line ln)
-                           (string= (file-truename src)
-                                    (file-truename file)))
-                  (throw 'addr (string-to-number addr 16)))))
-             ((looking-at re-short)
-              (let ((addr (match-string 1))
-                    (ln   (string-to-number (match-string 2))))
-                (when (and current-src
-                           (= line ln)
-                           (string= (file-truename current-src)
-                                    (file-truename file)))
-                  (throw 'addr (string-to-number addr 16))))))
-            (forward-line 1))
-	  ;; No match, notify and return nil
-          (message "No MMIX instruction on line %d." line)
-          nil)))))
-
+  "Return address of LINE in FILE from the cache, rebuilding if needed."
+  (let* ((mmo (concat (file-name-sans-extension file) ".mmo"))
+         (key (format "%s:%d" (file-truename file) line)))
+    ;; Rebuild cache if we have none or the .mmo changed since last build.
+    (when (or (null mmix--address-table-mtime)
+              (time-less-p mmix--address-table-mtime
+                           (file-attribute-modification-time
+                            (file-attributes mmo))))
+      (mmix--build-address-table mmo))
+    (gethash key mmix--address-table)))
 
 (defun mmix-toggle-breakpoint-at-line (&optional pos)
   "Toggle a breakpoint at POS (or current line)."
@@ -455,6 +464,7 @@ Returns text that should appear in the comint buffer."
     (process-put proc 'mmix-source-buffer source-buf)
     (with-current-buffer source-buf
       (mmix-debug-mode 1))
+    (mmix--build-address-table mmo-file)
     (mmix--set-initial-breakpoints mms-file)
     (display-buffer buf)))
 
