@@ -255,6 +255,136 @@ EVENT is the mouse-click event supplied by Emacs."
                mmix--breakpoints))))
 
 ;;;;
+;;;; Debugging session management
+;;;;
+
+(defun mmix-interactive-quit ()
+  "Send quit command to MMIX interactive session."
+  (interactive)
+  (mmix--send-console-command "q"))
+
+(defun mmix-interactive-trace-one-instruction ()
+  "Trace one MMIX instruction."
+  (interactive)
+  (mmix--send-console-command "n"))
+
+(defun mmix-interactive-continue ()
+  "Continue MMIX simulation until halt or breakpoint."
+  (interactive)
+  (mmix--send-console-command "c"))
+
+(defun mmix-interactive-show-stats ()
+  "Show current MMIX simulation statistics."
+  (interactive)
+  (mmix--send-console-command "s"))
+
+(defun mmix-interactive-help ()
+  "Show MMIX simulator help."
+  (interactive)
+  (mmix--send-console-command "h"))
+
+(defun mmix-interactive-trace-location (&optional pos)
+  "Trace an MMIX memory location at POS (or current line)."
+  (interactive)
+  (save-excursion
+    (when pos (goto-char pos))
+    (let* ((file (buffer-file-name))
+           (line (line-number-at-pos)))
+      (when (and file line)
+        (let ((addr (mmix--address-for-line file line)))
+          (when addr
+            (mmix--send-console-command (format "t%x" addr))))))))
+
+(defun mmix-interactive-untrace-location (&optional pos)
+  "Untrace an MMIX memory location at POS (or current line)."
+  (interactive)
+  (save-excursion
+    (when pos (goto-char pos))
+    (let* ((file (buffer-file-name))
+           (line (line-number-at-pos)))
+      (when (and file line)
+        (let ((addr (mmix--address-for-line file line)))
+          (when addr
+            (mmix--send-console-command (format "u%x" addr))))))))
+
+(defun mmix-interactive-goto-location (&optional pos)
+  "Go to an MMIX memory location at POS (or current line)."
+  (interactive)
+  (save-excursion
+    (when pos (goto-char pos))
+    (let* ((file (buffer-file-name))
+	   (line (line-number-at-pos)))
+      (when (and file line)
+	(let ((addr (mmix--address-for-line file line)))
+	  (when addr (mmix--send-console-command (format "@%x" addr))))))))
+
+(defun mmix-interactive-set-text-segment ()
+  "Set current segment to Text_Segment (T)."
+  (interactive)
+  (mmix--send-console-command "T"))
+
+(defun mmix-interactive-set-data-segment ()
+  "Set current segment to Data_Segment (D)."
+  (interactive)
+  (mmix--send-console-command "D"))
+
+(defun mmix-interactive-set-pool-segment ()
+  "Set current segment to Pool_Segment (P)."
+  (interactive)
+  (mmix--send-console-command "P"))
+
+(defun mmix-interactive-set-stack-segment ()
+  "Set current segment to Stack_Segment (S)."
+  (interactive)
+  (mmix--send-console-command "S"))
+
+(defun mmix-interactive-show-breakpoints ()
+  "Show all current breakpoints and tracepoints (B)."
+  (interactive)
+  (mmix--send-console-command "B"))
+
+(defvar mmix-debug-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") #'mmix-interactive-trace-one-instruction)
+    (define-key map (kbd "SPC") #'mmix-interactive-trace-one-instruction)
+    (define-key map (kbd "n") #'mmix-interactive-trace-one-instruction)
+    (define-key map (kbd "c") #'mmix-interactive-continue)
+    (define-key map (kbd "q") #'mmix-interactive-quit)
+    (define-key map (kbd "s") #'mmix-interactive-show-stats)
+    (define-key map (kbd "h") #'mmix-interactive-help)
+    (define-key map (kbd "t") #'mmix-interactive-trace-location)
+    (define-key map (kbd "u") #'mmix-interactive-untrace-location)
+    (define-key map (kbd "T") #'mmix-interactive-set-text-segment)
+    (define-key map (kbd "D") #'mmix-interactive-set-data-segment)
+    (define-key map (kbd "P") #'mmix-interactive-set-pool-segment)
+    (define-key map (kbd "S") #'mmix-interactive-set-stack-segment)
+    (define-key map (kbd "B") #'mmix-interactive-show-breakpoints)
+    (define-key map (kbd "b") #'mmix-toggle-breakpoint-at-line)
+    (define-key map (kbd "@") #'mmix-interactive-goto-location)
+    (define-key map (kbd "g") #'mmix-interactive-goto-location)
+    map))
+
+
+(define-minor-mode mmix-debug-mode
+  "Minor mode for MMIX source buffers during debugging."
+  :init-value nil
+  :lighter " Dbg"
+  :keymap mmix-debug-mode-map
+  (if mmix-debug-mode
+      (setq-local buffer-read-only t)
+    (setq-local buffer-read-only nil)
+    (set-marker mmix--overlay-arrow-position nil)
+    ))
+
+(defun mmix-interactive-sentinel (proc _)
+  "Cleanup after MMIX interactive process PROC terminates."
+  (when-let* ((source-buf (process-get proc 'mmix-source-buffer))
+	      (_ (buffer-live-p source-buf)))
+    (with-current-buffer source-buf
+      (when mmix-debug-mode
+        (mmix-debug-mode -1)))))
+
+;;;;
 ;;;; Major mode
 ;;;;
 
@@ -308,17 +438,25 @@ Returns text that should appear in the comint buffer."
              (buffer-file-name))
      (list (read-file-name "MMIX object to debug: " nil nil t
                            (when buffer-file-name
-                             (concat (file-name-sans-extension buffer-file-name) ".mmo")))
+                             (concat (file-name-sans-extension buffer-file-name)
+				     ".mmo")))
            (when buffer-file-name buffer-file-name))))
-  (let* ((buf (get-buffer-create "*MMIX-Interactive*"))
-         (mms-file (or source-file (concat (file-name-sans-extension mmo-file) ".mms"))))
-    (make-comint-in-buffer "MMIX" buf mmix-interactive-executable nil
-           "-i" "-l" mmo-file)
+  (let* ((buf (make-comint "MMIX-Interactive"
+			   mmix-interactive-executable nil
+                           "-i" "-l" mmo-file))
+	 (proc (get-buffer-process buf))
+         (mms-file (or source-file (concat (file-name-sans-extension mmo-file)
+					   ".mms")))
+         (source-buf (find-file mms-file)))
     (with-current-buffer buf
       (mmix-interactive-mode)
       (setq mmix--source-file mms-file))
+    (set-process-sentinel proc #'mmix-interactive-sentinel)
+    (process-put proc 'mmix-source-buffer source-buf)
+    (with-current-buffer source-buf
+      (mmix-debug-mode 1))
     (mmix--set-initial-breakpoints mms-file)
-    (pop-to-buffer buf)))
+    (display-buffer buf)))
 
 ;;;;
 ;;;; Source integration
