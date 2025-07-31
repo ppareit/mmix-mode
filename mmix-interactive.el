@@ -202,7 +202,7 @@ We show an overlay arrow there, and momentarily pulse the line."
       (mmix--build-address-table mmo))
     (gethash key mmix--address-table)))
 
-(defun mmix-toggle-breakpoint-at-line (&optional pos)
+(defun mmix-toggle-breakpoint (&optional pos)
   "Toggle a breakpoint at POS (or current line)."
   (interactive)
   (save-excursion
@@ -248,7 +248,7 @@ EVENT is the mouse-click event supplied by Emacs."
     (with-current-buffer buf
       (save-excursion
         (goto-char pos)
-        (mmix-toggle-breakpoint-at-line pos)))))
+        (mmix-toggle-breakpoint pos)))))
 
 (defun mmix--set-initial-breakpoints (mms-file)
   "Set breakpoints for MMS-FILE when starting a new session."
@@ -368,7 +368,7 @@ EVENT is the mouse-click event supplied by Emacs."
     (define-key map (kbd "P") #'mmix-interactive-set-pool-segment)
     (define-key map (kbd "S") #'mmix-interactive-set-stack-segment)
     (define-key map (kbd "B") #'mmix-interactive-show-breakpoints)
-    (define-key map (kbd "b") #'mmix-toggle-breakpoint-at-line)
+    (define-key map (kbd "b") #'mmix-toggle-breakpoint)
     (define-key map (kbd "@") #'mmix-interactive-goto-location)
     (define-key map (kbd "g") #'mmix-interactive-goto-location)
     map))
@@ -401,7 +401,6 @@ EVENT is the mouse-click event supplied by Emacs."
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map comint-mode-map)
     ;; convenience bindings
-    (define-key map (kbd "C-c C-b") #'mmix-toggle-breakpoint-at-line)
     map)
   "Keymap for `mmix-interactive-mode'.")
 
@@ -474,7 +473,8 @@ Returns text that should appear in the comint buffer."
 
 (with-eval-after-load 'mmix-mode
   ;; Mouse binding in fringe
-  (define-key mmix-mode-map [left-fringe mouse-1] #'mmix-toggle-breakpoint-with-mouse))
+  (define-key mmix-mode-map [left-fringe mouse-1] #'mmix-toggle-breakpoint-with-mouse)
+  (define-key mmix-mode-map (kbd "C-c C-b") #'mmix-toggle-breakpoint))
 
 (provide 'mmix-interactive)
 ;;; mmix-interactive.el ends here
