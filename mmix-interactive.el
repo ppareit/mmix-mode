@@ -191,7 +191,11 @@ We show an overlay arrow there, and momentarily pulse the line."
           (file-attribute-modification-time (file-attributes mmo-file)))))
 
 (defun mmix--address-for-line (file line)
-  "Return address of LINE in FILE from the cache, rebuilding if needed."
+  "Return address of LINE in FILE from the cache, rebuilding if needed.
+
+If we are unable to get an address, it means that the user is on a line
+that is not an MMIX instruction, for instance a blank line or a line with
+a pseudo instruction.  So we notify user here."
   (let* ((mmo (concat (file-name-sans-extension file) ".mmo"))
          (key (format "%s:%d" (file-truename file) line)))
     ;; Rebuild cache if we have none or the .mmo changed since last build.
@@ -200,7 +204,8 @@ We show an overlay arrow there, and momentarily pulse the line."
                            (file-attribute-modification-time
                             (file-attributes mmo))))
       (mmix--build-address-table mmo))
-    (gethash key mmix--address-table)))
+    (or (gethash key mmix--address-table)
+	(error "Not an executable instruction at line %d" line))))
 
 (defun mmix-toggle-breakpoint (&optional pos)
   "Toggle a breakpoint at POS (or current line)."
@@ -302,7 +307,9 @@ EVENT is the mouse-click event supplied by Emacs."
       (when (and file line)
         (let ((addr (mmix--address-for-line file line)))
           (when addr
-            (mmix--send-console-command (format "t%x" addr))))))))
+            (mmix--send-console-command (format "t%x" addr))
+            (message "Tracing set at %s:%d (addr %x)"
+                     (file-name-nondirectory file) line addr)))))))
 
 (defun mmix-interactive-untrace-location (&optional pos)
   "Untrace an MMIX memory location at POS (or current line)."
@@ -314,7 +321,9 @@ EVENT is the mouse-click event supplied by Emacs."
       (when (and file line)
         (let ((addr (mmix--address-for-line file line)))
           (when addr
-            (mmix--send-console-command (format "u%x" addr))))))))
+            (mmix--send-console-command (format "u%x" addr))
+            (message "Tracing removed at %s:%d (addr %x)"
+                     (file-name-nondirectory file) line addr)))))))
 
 (defun mmix-interactive-goto-location (&optional pos)
   "Go to an MMIX memory location at POS (or current line)."
@@ -325,7 +334,10 @@ EVENT is the mouse-click event supplied by Emacs."
 	   (line (line-number-at-pos)))
       (when (and file line)
 	(let ((addr (mmix--address-for-line file line)))
-	  (when addr (mmix--send-console-command (format "@%x" addr))))))))
+	  (when addr 
+            (mmix--send-console-command (format "@%x" addr))
+            (message "Location (@) set at %s:%d (addr %x)"
+                     (file-name-nondirectory file) line addr))))))))
 
 (defun mmix-interactive-set-text-segment ()
   "Set current segment to Text_Segment (T)."
