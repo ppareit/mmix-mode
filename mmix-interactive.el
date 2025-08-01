@@ -187,90 +187,160 @@ We show an overlay arrow there, and momentarily pulse the line."
     (comint-send-string proc (concat cmd "\n"))))
 
 ;;;;
-;;;; Breakpoints
+;;;; Unified breakpoint and tracepoint handling
 ;;;;
 
-(defvar mmix--breakpoint-icon
-  (progn
-    (define-fringe-bitmap 'mmix-breakpoint
-      (vector #b00011100
-              #b00111110
-              #b01111111
-              #b01111111
-              #b01111111
-              #b01111111
-              #b00111110
-              #b00011100)
-      8 8 'center)
-    'mmix-breakpoint)
-  "Fringe bitmap used to show breakpoints.")
+(define-fringe-bitmap 'mmix-breakpoint
+  (vector #b00111100
+          #b01111110
+          #b11111111
+          #b11111111
+          #b11111111
+          #b11111111
+          #b01111110
+          #b00111100)
+  8 8 'center)
 
-(defvar mmix--breakpoint-face 'error
+(defface mmix-breakpoint-face
+  '((t :foreground "red"))
   "Face used for breakpoint fringe bitmap.")
 
-(defvar mmix--breakpoints (make-hash-table :test #'equal)
-  "Hash table mapping file:line -> (overlay . address).")
+(define-fringe-bitmap 'mmix-tracepoint
+  (vector #b00011000
+          #b00100100
+          #b01000010
+          #b10000001
+          #b10000001
+          #b01000010
+          #b00100100
+          #b00011000)
+  8 8 'center)
 
-(defun mmix-toggle-breakpoint (&optional pos)
-  "Toggle a breakpoint at POS (or current line)."
-  (interactive)
+(defface mmix-tracepoint-face
+  '((t :foreground "orange"))
+  "Face for MMIX tracepoints in the fringe.")
+
+(define-fringe-bitmap 'mmix-bp-tp
+  (vector #b00111000
+          #b01110100
+          #b11110010
+          #b11110001
+          #b11110001
+          #b11110010
+          #b01110100
+          #b00111000)
+  8 8 'center)
+
+(defface mmix-bp-tp-face
+  '((t :foreground "gold"))
+  "Fringe-face voor gecombineerde break-/tracepoints.")
+
+;; Marker struct
+(cl-defstruct mmix-marker overlay flags addr)
+;;   overlay – the overlay object at line start
+;;   flags   – plist :break / :trace booleans
+;;   addr    – integer address in MMIX memory
+
+(defvar mmix--markers (make-hash-table :test #'equal)
+  "Hash file:line -> `mmix-marker' table.")
+
+(defun mmix--update-marker-visuals (mkr)
+  "Refresh overlay icon and face for marker MKR, or delete if no flags."
+  (let* ((flags (mmix-marker-flags mkr))
+         (bmp   (cond ((and (plist-get flags :break) (plist-get flags :trace))
+                       'mmix-bp-tp)
+                      ((plist-get flags :break) 'mmix-breakpoint)
+                      ((plist-get flags :trace) 'mmix-tracepoint)
+                      (t nil)))
+         (face  (cond ((and (plist-get flags :break) (plist-get flags :trace))
+                       'mmix-bp-tp-face)
+                      ((plist-get flags :break) 'mmix-breakpoint-face)
+                      ((plist-get flags :trace) 'mmix-tracepoint-face))))
+    (when (mmix-marker-overlay mkr)
+      (delete-overlay (mmix-marker-overlay mkr))
+      (setf (mmix-marker-overlay mkr) nil))
+    (when bmp
+      (let ((ov (make-overlay (line-beginning-position) (line-beginning-position))))
+        (overlay-put ov 'before-string
+                     (propertize " " 'display `(left-fringe ,bmp ,face)))
+        (overlay-put ov 'mmix-addr   (mmix-marker-addr mkr))
+        (overlay-put ov 'mmix-break  (plist-get flags :break))
+        (overlay-put ov 'mmix-trace  (plist-get flags :trace))
+        (setf (mmix-marker-overlay mkr) ov)))))
+
+(defun mmix--toggle (pos type)
+  "Toggle TYPE (either :break or :trace) at POS, updating UI and simulator."
   (save-excursion
-    (when pos (goto-char pos))
+    (goto-char pos)
     (let* ((file (buffer-file-name))
            (line (line-number-at-pos))
-           (key (format "%s:%d" file line))
-           (bp (gethash key mmix--breakpoints)))
-      (if bp
-          ;; Remove breakpoint
-          (let ((ov (car bp)) (addr (cdr bp)))
-            (delete-overlay ov)
-            (remhash key mmix--breakpoints)
-            (when addr (mmix--send-console-command (format "br%x" addr)))
-            (message "Breakpoint removed at %s:%d (addr %x)"
-		     (file-name-nondirectory file)
-		     line
-		     addr))
-        ;; Add breakpoint
-        (when-let* ((addr (mmix--address-for-line file line))
-		    (ov (make-overlay (line-beginning-position)
-				      (line-beginning-position))))
-          (overlay-put ov 'before-string
-		       (propertize " " 'display
-				   `(left-fringe ,mmix--breakpoint-icon
-						 ,mmix--breakpoint-face)))
-          (puthash key (cons ov addr) mmix--breakpoints)
-          (mmix--send-console-command (format "bx%x" addr))
-          (message "Breakpoint set at %s:%d (addr %x)"
-		   (file-name-nondirectory file)
-		   line
-		   addr))))))
+           (key  (format "%s:%d" file line))
+           (mkr  (or (gethash key mmix--markers)
+                     (make-mmix-marker :overlay nil
+                                       :flags nil
+                                       :addr (mmix--address-for-line file line))))
+           (old   (plist-get (mmix-marker-flags mkr) type)))
+      ;; Flip flag
+      (setf (mmix-marker-flags mkr)
+            (plist-put (mmix-marker-flags mkr) type (not old)))
+      ;; Communicate with simulator
+      (pcase (cons type old)
+        (`(:break . nil)
+	 (mmix--send-console-command (format "bx%x" (mmix-marker-addr mkr))))
+        (`(:break . t)
+	 (mmix--send-console-command (format "br%x" (mmix-marker-addr mkr))))
+        (`(:trace . nil)
+	 (mmix--send-console-command (format "t%x" (mmix-marker-addr mkr))))
+        (`(:trace . t)
+	 (mmix--send-console-command (format "u%x" (mmix-marker-addr mkr)))))
+      ;; Update visuals
+      (mmix--update-marker-visuals mkr)
+      ;; Store or drop marker
+      (if (or (plist-get (mmix-marker-flags mkr) :break)
+              (plist-get (mmix-marker-flags mkr) :trace))
+          (puthash key mkr mmix--markers)
+        (remhash key mmix--markers))
+      ;; User feedback
+      (message "%s %s at %s:%d (addr %x)"
+               (capitalize (symbol-name type))
+               (if old "removed" "set")
+               (file-name-nondirectory file)
+               line
+               (mmix-marker-addr mkr)))))
+
+(defun mmix-toggle-breakpoint (&optional pos)
+  "Interactively toggle a breakpoint at POS or point."
+  (interactive)
+  (mmix--toggle (or pos (point)) :break))
+
+(defun mmix-toggle-tracepoint (&optional pos)
+  "Interactively toggle a tracepoint at POS or point."
+  (interactive)
+  (mmix--toggle (or pos (point)) :trace))
 
 (defun mmix-toggle-breakpoint-with-mouse (event)
   "Toggle a breakpoint on the line that was clicked in the left fringe.
 
-EVENT is the mouse-click event supplied by Emacs."
-  (interactive "e")      ; e is the raw event
-  ;; Extract the position of the click without moving point
-  (let* ((posn  (event-start event))      ; (posn WINDOW AREA XY POS . etc)
+EVENT is the mouse-click event supplied by Emacs."  (interactive "e")
+  (let* ((posn  (event-start event))
          (buf   (window-buffer (posn-window posn)))
-         (pos   (posn-point posn)))       ; buffer position
+         (pos   (posn-point posn)))
     (with-current-buffer buf
-      (save-excursion
-        (goto-char pos)
-        (mmix-toggle-breakpoint pos)))))
+      (mmix-toggle-breakpoint pos))))
 
-(defun mmix--set-initial-breakpoints (mms-file)
-  "Set breakpoints for MMS-FILE when starting a new session."
-  (when (and mms-file (file-exists-p mms-file))
-    (let ((mms-file-truename (file-truename mms-file)))
-      (maphash (lambda (key val)
-                 (when (string-match "\\(.*\\):[0-9]+$" key)
-                   (let* ((breakpoint-file (match-string 1 key))
-                          (addr (cdr val)))
-                     (when (and addr (file-exists-p breakpoint-file)
-                                (string= (file-truename breakpoint-file) mms-file-truename))
-                       (mmix--send-console-command (format "bx%x" addr))))))
-               mmix--breakpoints))))
+(defun mmix--set-initial-markers (mms-file)
+  "Resend break/trace commands for markers in MMS-FILE to simulator."
+  (let ((truename (file-truename mms-file)))
+    (maphash (lambda (_ mkr)
+               (when (and (mmix-marker-addr mkr)
+                          (mmix-marker-overlay mkr))
+                 (with-current-buffer (overlay-buffer (mmix-marker-overlay mkr))
+                   (when (string= (file-truename (buffer-file-name)) truename)
+                     (when (plist-get (mmix-marker-flags mkr) :break)
+                       (mmix--send-console-command (format "bx%x" (mmix-marker-addr mkr))))
+                     (when (plist-get (mmix-marker-flags mkr) :trace)
+                       (mmix--send-console-command (format "t%x" (mmix-marker-addr mkr))))))))
+             mmix--markers)))
 
 ;;;;
 ;;;; Debugging session management
@@ -300,30 +370,6 @@ EVENT is the mouse-click event supplied by Emacs."
   "Show MMIX simulator help."
   (interactive)
   (mmix--send-console-command "h"))
-
-(defun mmix-interactive-trace-location (&optional pos)
-  "Trace an MMIX memory location at POS (or current line)."
-  (interactive)
-  (save-excursion
-    (when pos (goto-char pos))
-    (when-let* ((file (buffer-file-name))
-                (line (line-number-at-pos))
-                (addr (mmix--address-for-line file line)))
-      (mmix--send-console-command (format "t%x" addr))
-      (message "Tracing set at %s:%d (addr %x)"
-               (file-name-nondirectory file) line addr))))
-
-(defun mmix-interactive-untrace-location (&optional pos)
-  "Untrace an MMIX memory location at POS (or current line)."
-  (interactive)
-  (save-excursion
-    (when pos (goto-char pos))
-    (when-let* ((file (buffer-file-name))
-                (line (line-number-at-pos))
-                (addr (mmix--address-for-line file line)))
-      (mmix--send-console-command (format "u%x" addr))
-      (message "Tracing removed at %s:%d (addr %x)"
-               (file-name-nondirectory file) line addr))))
 
 (defun mmix-interactive-goto-location (&optional pos)
   "Go to an MMIX memory location at POS (or current line)."
@@ -371,8 +417,7 @@ EVENT is the mouse-click event supplied by Emacs."
     (define-key map (kbd "q") #'mmix-interactive-quit)
     (define-key map (kbd "s") #'mmix-interactive-show-stats)
     (define-key map (kbd "h") #'mmix-interactive-help)
-    (define-key map (kbd "t") #'mmix-interactive-trace-location)
-    (define-key map (kbd "u") #'mmix-interactive-untrace-location)
+    (define-key map (kbd "t") #'mmix-toggle-tracepoint)
     (define-key map (kbd "T") #'mmix-interactive-set-text-segment)
     (define-key map (kbd "D") #'mmix-interactive-set-data-segment)
     (define-key map (kbd "P") #'mmix-interactive-set-pool-segment)
@@ -474,7 +519,7 @@ Returns text that should appear in the comint buffer."
     (with-current-buffer source-buf
       (mmix-debug-mode 1))
     (mmix--build-address-table mmo-file)
-    (mmix--set-initial-breakpoints mms-file)
+    (mmix--set-initial-markers mms-file)
     (display-buffer buf)))
 
 ;;;;
