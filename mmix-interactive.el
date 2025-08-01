@@ -554,34 +554,38 @@ Returns text that should appear in the comint buffer."
 ;;;;
 
 ;;;###autoload
-(defun mmix-interactive-run (mmo-file &optional source-file)
-  "Run MMIX debugger on MMO-FILE, optionally linking SOURCE-FILE (.mms)."
-  (interactive
-   (if (and (buffer-file-name) (string-match-p "\\.mms\\'" (buffer-file-name)))
-       (list (concat (file-name-sans-extension (buffer-file-name)) ".mmo")
-             (buffer-file-name))
-     (list (read-file-name "MMIX object to debug: " nil nil t
-                           (when buffer-file-name
-                             (concat (file-name-sans-extension buffer-file-name)
-				     ".mmo")))
-           (when buffer-file-name buffer-file-name))))
-  (let* ((buf (make-comint "MMIX-Interactive"
-			   mmix-interactive-executable nil
-                           "-i" "-l" mmo-file))
-	 (proc (get-buffer-process buf))
-         (mms-file (or source-file (concat (file-name-sans-extension mmo-file)
-					   ".mms")))
-         (source-buf (find-file mms-file)))
-    (with-current-buffer buf
-      (mmix-interactive-mode)
-      (setq mmix--source-file mms-file))
-    (set-process-sentinel proc #'mmix-interactive-sentinel)
-    (process-put proc 'mmix-source-buffer source-buf)
-    (with-current-buffer source-buf
-      (mmix-debug-mode 1))
-    (mmix--build-address-table mmo-file)
-    (mmix--set-initial-markers mms-file)
-    (display-buffer buf)))
+(defun mmix-interactive-run ()
+  "Run MMIX debugger on the .mmo file for the current .mms buffer."
+  (interactive)
+  (let* ((mms-file (buffer-file-name))
+         (mmo-file (concat (file-name-sans-extension mms-file) ".mmo")))
+    (when (not (and mms-file (string-match-p "\\.mms\\'" mms-file)))
+      (error "Not a .mms file buffer"))
+    (when (buffer-modified-p)
+      (error "Buffer %s needs to be saved first"
+	     (file-name-nondirectory mms-file)))
+    (when (not (file-exists-p mmo-file))
+      (error "Object file %s does not exist, assemble first"
+	     (file-name-nondirectory mmo-file)))
+    (when (file-newer-than-file-p mms-file mmo-file)
+      (error "Source file %s is newer than object file %s, assemble first"
+             (file-name-nondirectory mms-file)
+             (file-name-nondirectory mmo-file)))
+    (let* ((buf (make-comint "MMIX-Interactive"
+                             mmix-interactive-executable nil
+                             "-i" "-l" mmo-file))
+           (proc (get-buffer-process buf))
+           (source-buf (current-buffer)))
+      (with-current-buffer buf
+        (mmix-interactive-mode)
+        (setq mmix--source-file mms-file))
+      (set-process-sentinel proc #'mmix-interactive-sentinel)
+      (process-put proc 'mmix-source-buffer source-buf)
+      (with-current-buffer source-buf
+        (mmix-debug-mode 1))
+      (mmix--build-address-table mmo-file)
+      (mmix--set-initial-markers mms-file)
+      (display-buffer buf))))
 
 ;;;;
 ;;;; Source integration
