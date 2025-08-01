@@ -76,11 +76,68 @@
 (defvar-local mmix--running-p nil
   "Non-nil while program is executing (between prompts).")
 
+;;;;
+;;;; Address cache
+;;;;
+
 (defvar mmix--address-table (make-hash-table :test #'equal)
   "Cache mapping truename:line -> address integer.")
 
 (defvar mmix--address-table-mtime nil
   "Modification time of the .mmo file used to build `mmix--address-table'.")
+
+(defun mmix--build-address-table (mmo-file)
+  "Parse MMO-FILE with mmotype and fill `mmix--address-table'."
+  (clrhash mmix--address-table)
+  (let ((re-full  (rx bol
+                      (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
+                      "(\"" (group (*? (not (any "\"")))) "\", line "
+                      (group (+ digit)) ")"))
+        (re-short (rx bol
+                      (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
+                      "(line " (group (+ digit)) ")"))
+        (current-src nil))
+    (with-temp-buffer
+      (insert (shell-command-to-string
+               (format "mmotype %s" (shell-quote-argument mmo-file))))
+      (goto-char (point-min))
+      (while (not (eobp))
+        (cond
+         ((looking-at re-full)
+          (let ((addr  (match-string 1))
+                (src   (file-truename (match-string 2)))
+                (line  (match-string 3)))
+            (setq current-src src)
+            (puthash (format "%s:%s" src line)
+                     (string-to-number addr 16)
+                     mmix--address-table)))
+         ((looking-at re-short)
+          (let ((addr (match-string 1))
+                (line (match-string 2)))
+            (when current-src
+              (puthash (format "%s:%s" current-src line)
+                       (string-to-number addr 16)
+                       mmix--address-table)))))
+        (forward-line 1)))
+    (setq mmix--address-table-mtime
+          (file-attribute-modification-time (file-attributes mmo-file)))))
+
+(defun mmix--address-for-line (file line)
+  "Return address of LINE in FILE from the cache, rebuilding if needed.
+
+If we are unable to get an address, it means that the user is on a line
+that is not an MMIX instruction, for instance a blank line or a line with
+a pseudo instruction.  So we notify user here."
+  (let* ((mmo (concat (file-name-sans-extension file) ".mmo"))
+         (key (format "%s:%d" (file-truename file) line)))
+    ;; Rebuild cache if we have none or the .mmo changed since last build.
+    (when (or (null mmix--address-table-mtime)
+              (time-less-p mmix--address-table-mtime
+                           (file-attribute-modification-time
+                            (file-attributes mmo))))
+      (mmix--build-address-table mmo))
+    (or (gethash key mmix--address-table)
+	(error "Not an executable instruction at line %d" line))))
 
 ;;;;
 ;;;; Overlay arrow support
@@ -153,59 +210,6 @@ We show an overlay arrow there, and momentarily pulse the line."
 
 (defvar mmix--breakpoints (make-hash-table :test #'equal)
   "Hash table mapping file:line -> (overlay . address).")
-
-(defun mmix--build-address-table (mmo-file)
-  "Parse MMO-FILE with mmotype and fill `mmix--address-table'."
-  (clrhash mmix--address-table)
-  (let ((re-full  (rx bol
-                      (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
-                      "(\"" (group (*? (not (any "\"")))) "\", line "
-                      (group (+ digit)) ")"))
-        (re-short (rx bol
-                      (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
-                      "(line " (group (+ digit)) ")"))
-        (current-src nil))
-    (with-temp-buffer
-      (insert (shell-command-to-string
-               (format "mmotype %s" (shell-quote-argument mmo-file))))
-      (goto-char (point-min))
-      (while (not (eobp))
-        (cond
-         ((looking-at re-full)
-          (let ((addr  (match-string 1))
-                (src   (file-truename (match-string 2)))
-                (line  (match-string 3)))
-            (setq current-src src)
-            (puthash (format "%s:%s" src line)
-                     (string-to-number addr 16)
-                     mmix--address-table)))
-         ((looking-at re-short)
-          (let ((addr (match-string 1))
-                (line (match-string 2)))
-            (when current-src
-              (puthash (format "%s:%s" current-src line)
-                       (string-to-number addr 16)
-                       mmix--address-table)))))
-        (forward-line 1)))
-    (setq mmix--address-table-mtime
-          (file-attribute-modification-time (file-attributes mmo-file)))))
-
-(defun mmix--address-for-line (file line)
-  "Return address of LINE in FILE from the cache, rebuilding if needed.
-
-If we are unable to get an address, it means that the user is on a line
-that is not an MMIX instruction, for instance a blank line or a line with
-a pseudo instruction.  So we notify user here."
-  (let* ((mmo (concat (file-name-sans-extension file) ".mmo"))
-         (key (format "%s:%d" (file-truename file) line)))
-    ;; Rebuild cache if we have none or the .mmo changed since last build.
-    (when (or (null mmix--address-table-mtime)
-              (time-less-p mmix--address-table-mtime
-                           (file-attribute-modification-time
-                            (file-attributes mmo))))
-      (mmix--build-address-table mmo))
-    (or (gethash key mmix--address-table)
-	(error "Not an executable instruction at line %d" line))))
 
 (defun mmix-toggle-breakpoint (&optional pos)
   "Toggle a breakpoint at POS (or current line)."
