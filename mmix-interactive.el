@@ -302,42 +302,36 @@ EVENT is the mouse-click event supplied by Emacs."
   (interactive)
   (save-excursion
     (when pos (goto-char pos))
-    (let* ((file (buffer-file-name))
-           (line (line-number-at-pos)))
-      (when (and file line)
-        (let ((addr (mmix--address-for-line file line)))
-          (when addr
-            (mmix--send-console-command (format "t%x" addr))
-            (message "Tracing set at %s:%d (addr %x)"
-                     (file-name-nondirectory file) line addr)))))))
+    (when-let* ((file (buffer-file-name))
+                (line (line-number-at-pos))
+                (addr (mmix--address-for-line file line)))
+      (mmix--send-console-command (format "t%x" addr))
+      (message "Tracing set at %s:%d (addr %x)"
+               (file-name-nondirectory file) line addr))))
 
 (defun mmix-interactive-untrace-location (&optional pos)
   "Untrace an MMIX memory location at POS (or current line)."
   (interactive)
   (save-excursion
     (when pos (goto-char pos))
-    (let* ((file (buffer-file-name))
-           (line (line-number-at-pos)))
-      (when (and file line)
-        (let ((addr (mmix--address-for-line file line)))
-          (when addr
-            (mmix--send-console-command (format "u%x" addr))
-            (message "Tracing removed at %s:%d (addr %x)"
-                     (file-name-nondirectory file) line addr)))))))
+    (when-let* ((file (buffer-file-name))
+                (line (line-number-at-pos))
+                (addr (mmix--address-for-line file line)))
+      (mmix--send-console-command (format "u%x" addr))
+      (message "Tracing removed at %s:%d (addr %x)"
+               (file-name-nondirectory file) line addr))))
 
 (defun mmix-interactive-goto-location (&optional pos)
   "Go to an MMIX memory location at POS (or current line)."
   (interactive)
   (save-excursion
     (when pos (goto-char pos))
-    (let* ((file (buffer-file-name))
-	   (line (line-number-at-pos)))
-      (when (and file line)
-	(let ((addr (mmix--address-for-line file line)))
-	  (when addr 
-            (mmix--send-console-command (format "@%x" addr))
-            (message "Location (@) set at %s:%d (addr %x)"
-                     (file-name-nondirectory file) line addr))))))))
+    (when-let* ((file (buffer-file-name))
+                (line (line-number-at-pos))
+                (addr (mmix--address-for-line file line)))
+      (mmix--send-console-command (format "@%x" addr))
+      (message "Location (@) set at %s:%d (addr %x)"
+               (file-name-nondirectory file) line addr))))
 
 (defun mmix-interactive-set-text-segment ()
   "Set current segment to Text_Segment (T)."
