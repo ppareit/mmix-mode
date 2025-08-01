@@ -83,12 +83,16 @@
 (defvar mmix--address-table (make-hash-table :test #'equal)
   "Cache mapping truename:line -> address integer.")
 
+(defvar mmix--address-to-line-info-table (make-hash-table)
+  "Cache mapping address integer -> truename:line.")
+
 (defvar mmix--address-table-mtime nil
-  "Modification time of the .mmo file used to build `mmix--address-table'.")
+  "Modification time of the .mmo file used to build the address caches.")
 
 (defun mmix--build-address-table (mmo-file)
-  "Parse MMO-FILE with mmotype and fill `mmix--address-table'."
+  "Parse MMO-FILE with mmotype and fill the address caches."
   (clrhash mmix--address-table)
+  (clrhash mmix--address-to-line-info-table)
   (let ((re-full  (rx bol
                       (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
                       "(\"" (group (*? (not (any "\"")))) "\", line "
@@ -110,14 +114,20 @@
             (setq current-src src)
             (puthash (format "%s:%s" src line)
                      (string-to-number addr 16)
-                     mmix--address-table)))
+                     mmix--address-table)
+            (puthash (string-to-number addr 16)
+                     (format "%s:%s" src line)
+                     mmix--address-to-line-info-table)))
          ((looking-at re-short)
           (let ((addr (match-string 1))
                 (line (match-string 2)))
             (when current-src
               (puthash (format "%s:%s" current-src line)
                        (string-to-number addr 16)
-                       mmix--address-table)))))
+                       mmix--address-table)
+              (puthash (string-to-number addr 16)
+                       (format "%s:%s" current-src line)
+                       mmix--address-to-line-info-table)))))
         (forward-line 1)))
     (setq mmix--address-table-mtime
           (file-attribute-modification-time (file-attributes mmo-file)))))
@@ -139,21 +149,38 @@ a pseudo instruction.  So we notify user here."
     (or (gethash key mmix--address-table)
 	(error "Not an executable instruction at line %d" line))))
 
+(defun mmix--line-for-address (file address)
+  "Return line number for ADDRESS in FILE from cache.
+This is the inverse of `mmix--address-for-line'.
+Rebuilds cache if needed."
+  (let* ((mmo (concat (file-name-sans-extension file) ".mmo"))
+         (truename (file-truename file)))
+    ;; Rebuild cache if we have none or the .mmo changed since last build.
+    (when (or (null mmix--address-table-mtime)
+              (time-less-p mmix--address-table-mtime
+                           (file-attribute-modification-time
+                            (file-attributes mmo))))
+      (mmix--build-address-table mmo))
+    (when-let ((line-info (gethash address mmix--address-to-line-info-table)))
+      (when (string-match "\\(.*\\):\\([0-9]+\\)$" line-info)
+        (let ((file-from-key (match-string 1 line-info))
+              (line-str (match-string 2 line-info)))
+          (when (string-equal truename file-from-key)
+            (string-to-number line-str)))))))
+
 ;;;;
 ;;;; Overlay arrow support
 ;;;;
 
 (defvar mmix--overlay-arrow-position nil
-  "Marker used by `mmix--goto-line-in-source' for the overlay arrow.")
+  "Marker used by `mmix--show-execution-point' for the overlay arrow.")
 
-(defun mmix--goto-line-in-source (file line)
-  "Visit FILE, go to LINE, for stepping.
-
-We show an overlay arrow there, and momentarily pulse the line."
+(defun mmix--show-execution-point (file line)
+  "Show execution point at LINE in FILE with an overlay arrow."
   (when (and file line (integerp line) (> line 0))
     ;; Load the buffer without selecting it
     (let* ((buf (find-file-noselect file))
-           ;; Ensure it's visible so both arrow & pulse are rendered
+           ;; Ensure it's visible so arrow is rendered
            (win (or (get-buffer-window buf)
                     (display-buffer buf))))
       (with-selected-window win
@@ -165,8 +192,20 @@ We show an overlay arrow there, and momentarily pulse the line."
           (setq mmix--overlay-arrow-position (make-marker)))
         (set-marker mmix--overlay-arrow-position (point))
         (setq-local overlay-arrow-position mmix--overlay-arrow-position)
-        (setq-local overlay-arrow-string "=>")
-        ;; Pulse highlight (momentary)
+        (setq-local overlay-arrow-string "=>")))))
+
+(defun mmix--pulse-line-in-source (file line)
+  "Pulse LINE in FILE."
+  (when (and file line (integerp line) (> line 0))
+    ;; Load the buffer without selecting it
+    (let* ((buf (find-file-noselect file))
+           ;; Ensure it's visible so pulse is rendered
+           (win (or (get-buffer-window buf)
+                    (display-buffer buf))))
+      (with-selected-window win
+        ;; Move point to the requested line
+        (goto-char (point-min))
+        (forward-line (1- line))
         (pulse-momentary-highlight-region
          (line-beginning-position)
          (line-end-position))))))
@@ -478,8 +517,16 @@ Returns text that should appear in the comint buffer."
        ;; source line indicator from `mmix -i`: "line 42: ..."
        ((string-match "^line \\([0-9]+\\):.*$" ln)
         (let ((num (string-to-number (match-string 1 ln))))
-          (mmix--goto-line-in-source mmix--source-file num))
-	(setq result (concat result ln "\n")))
+          (mmix--pulse-line-in-source mmix--source-file num))
+        (setq result (concat result ln "\n")))
+       ;; Location indicator: "(... at location #...)"
+       ((string-match "at location #\\([0-9a-fA-F]+\\)" ln)
+        (let* ((addr-hex (match-string 1 ln))
+               (addr (string-to-number addr-hex 16))
+               (line (mmix--line-for-address mmix--source-file addr)))
+          (when line
+            (mmix--show-execution-point mmix--source-file line)))
+        (setq result (concat result ln "\n")))
        ;; prompt line indicates stop -> refresh registers
        ((string-match "^mmix> *$" ln)
         (setq mmix--running-p nil)
