@@ -308,7 +308,11 @@ Rebuilds cache if needed."
         (setf (mmix-marker-overlay mkr) ov)))))
 
 (defun mmix--toggle (pos type)
-  "Toggle TYPE (either :break or :trace) at POS, updating UI and simulator."
+  "Toggle TYPE (either :break or :trace) at POS, updating UI and simulator.
+
+Breakpoints are set one tetrabyte (4-bytes) before, from the documentation:
+`bx1000' causes a break in the simulation just *after* the tetrabyte in #1000
+is executed.  This is unexpected behaviour in modern debugging."
   (save-excursion
     (goto-char pos)
     (let* ((file (buffer-file-name))
@@ -325,13 +329,17 @@ Rebuilds cache if needed."
       ;; Communicate with simulator
       (pcase (cons type old)
         (`(:break . nil)
-	 (mmix--send-console-command (format "bx%x" (mmix-marker-addr mkr))))
+	 (mmix--send-console-command (format "bx%x"
+					     (- (mmix-marker-addr mkr) 4))))
         (`(:break . t)
-	 (mmix--send-console-command (format "br%x" (mmix-marker-addr mkr))))
+	 (mmix--send-console-command (format "b%x"
+					     (- (mmix-marker-addr mkr) 4))))
         (`(:trace . nil)
-	 (mmix--send-console-command (format "t%x" (mmix-marker-addr mkr))))
+	 (mmix--send-console-command (format "t%x"
+					     (mmix-marker-addr mkr))))
         (`(:trace . t)
-	 (mmix--send-console-command (format "u%x" (mmix-marker-addr mkr)))))
+	 (mmix--send-console-command (format "u%x"
+					     (mmix-marker-addr mkr)))))
       ;; Update visuals
       (mmix--update-marker-visuals mkr)
       ;; Store or drop marker
@@ -368,7 +376,11 @@ EVENT is the mouse-click event supplied by Emacs."  (interactive "e")
       (mmix-toggle-breakpoint pos))))
 
 (defun mmix--set-initial-markers (mms-file)
-  "Resend break/trace commands for markers in MMS-FILE to simulator."
+  "Resend break/trace commands for markers in MMS-FILE to simulator.
+
+Breakpoints are set one tetrabyte (4-bytes) before, from the documentation:
+`bx1000' causes a break in the simulation just *after* the tetrabyte in #1000
+is executed.  This is unexpected behaviour in modern debugging."
   (let ((truename (file-truename mms-file)))
     (maphash (lambda (_ mkr)
                (when (and (mmix-marker-addr mkr)
@@ -376,9 +388,11 @@ EVENT is the mouse-click event supplied by Emacs."  (interactive "e")
                  (with-current-buffer (overlay-buffer (mmix-marker-overlay mkr))
                    (when (string= (file-truename (buffer-file-name)) truename)
                      (when (plist-get (mmix-marker-flags mkr) :break)
-                       (mmix--send-console-command (format "bx%x" (mmix-marker-addr mkr))))
+                       (mmix--send-console-command
+			(format "bx%x" (- (mmix-marker-addr mkr) 4))))
                      (when (plist-get (mmix-marker-flags mkr) :trace)
-                       (mmix--send-console-command (format "t%x" (mmix-marker-addr mkr))))))))
+                       (mmix--send-console-command
+			(format "t%x" (mmix-marker-addr mkr))))))))
              mmix--markers)))
 
 ;;;;
