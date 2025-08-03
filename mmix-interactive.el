@@ -74,8 +74,8 @@
 (defvar-local mmix--source-file nil
   "Full pathname of the current MMIX source (.mms) file.")
 
-(defvar-local mmix--continued-p nil
-  "Non-nil after a continue command has been sent.")
+(defvar-local mmix--refresh-state-on-prompt-p nil
+  "Non-nil to send `s' after next prompt to refresh UI state.")
 
 (defvar-local mmix--running-p nil
   "Non-nil while program is executing (between prompts).")
@@ -250,17 +250,25 @@ This variable is made buffer-local in `mmix-debug-mode' buffers.")
 ;;;; Process helpers
 ;;;;
 
-(defun mmix--send-console-command (cmd &optional silent-p)
+(defun mmix--send-console-command (cmd &rest args)
   "Send CMD plus newline to the current MMIX process.
-If SILENT-P is non-nil, do not echo the command in the buffer."
-  (when-let* ((buf (get-buffer "*MMIX-Interactive*"))
-              (proc (get-buffer-process buf)))
-    (unless silent-p
-      (with-current-buffer buf
-        (goto-char (process-mark proc))
-        (insert cmd "\n")
-        (set-marker (process-mark proc) (point))))
-    (comint-send-string proc (concat cmd "\n"))))
+
+Accepts keyword arguments ARGS:
+  :silent    — if non-nil, do not echo the command
+  :refresh   — if non-nil, schedule UI refresh after command completes."
+  (let ((silent-p (plist-get args :silent))
+        (refresh-p (plist-get args :refresh)))
+    (when-let* ((buf (get-buffer "*MMIX-Interactive*"))
+                (proc (get-buffer-process buf)))
+      (when refresh-p
+        (with-current-buffer buf
+          (setq mmix--refresh-state-on-prompt-p t)))
+      (unless silent-p
+        (with-current-buffer buf
+          (goto-char (process-mark proc))
+          (insert cmd "\n")
+          (set-marker (process-mark proc) (point))))
+      (comint-send-string proc (concat cmd "\n")))))
 
 ;;;;
 ;;;; Unified breakpoint and tracepoint handling
@@ -558,10 +566,7 @@ we remove the overlay."
 (defun mmix-interactive-continue ()
   "Continue MMIX simulation until halt or breakpoint."
   (interactive)
-  (when-let ((buf (get-buffer "*MMIX-Interactive*")))
-    (with-current-buffer buf
-      (setq mmix--continued-p t)))
-  (mmix--send-console-command "c"))
+  (mmix--send-console-command "c" :refresh t))
 
 (defun mmix-interactive-show-stats ()
   "Show current MMIX simulation statistics."
@@ -581,7 +586,7 @@ we remove the overlay."
     (when-let* ((file (buffer-file-name))
                 (line (line-number-at-pos))
                 (addr (mmix--address-for-line file line)))
-      (mmix--send-console-command (format "@%x" addr))
+      (mmix--send-console-command (format "@%x" addr) :refresh t)
       (message "Location (@) set at %s:%d (addr %x)"
                (file-name-nondirectory file) line addr))))
 
@@ -627,7 +632,6 @@ we remove the overlay."
     (define-key map (kbd "B") #'mmix-interactive-show-breakpoints)
     (define-key map (kbd "b") #'mmix-toggle-breakpoint)
     (define-key map (kbd "@") #'mmix-interactive-goto-location)
-    (define-key map (kbd "g") #'mmix-interactive-goto-location)
     map))
 
 
@@ -686,12 +690,12 @@ but then we don't see the change."
         (cond
          (is-prompt
           (setq mmix--running-p nil)
-          (if mmix--continued-p
+          (if mmix--refresh-state-on-prompt-p
               (progn
-                (setq mmix--continued-p nil)
+                (setq mmix--refresh-state-on-prompt-p nil)
                 (setq mmix--suppress-output-p t)
                 (setq append-to-result nil) ; Swallow this prompt
-                (mmix--send-console-command "s" t))
+                (mmix--send-console-command "s" :silent t))
             ;; This is the prompt after 's', or a normal one.
             ;; We should stop suppressing now.
             (setq mmix--suppress-output-p nil)))
