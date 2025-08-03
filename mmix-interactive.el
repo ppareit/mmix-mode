@@ -53,6 +53,7 @@
 (require 'comint)
 (require 'cl-lib)
 (require 'pulse)
+(require 'seq)
 
 (eval-when-compile
   (add-to-list 'load-path
@@ -135,19 +136,21 @@
 (defun mmix--address-for-line (file line)
   "Return address of LINE in FILE from the cache, rebuilding if needed.
 
-If we are unable to get an address, it means that the user is on a line
-that is not an MMIX instruction, for instance a blank line or a line with
-a pseudo instruction.  So we notify user here."
+Return nil when:
+ - no address corresponds to the given line (e.g., it's a blank
+              line, a comment, or contains a pseudo-instruction)
+ - the mmo file is non existend of out of sync"
   (let* ((mmo (concat (file-name-sans-extension file) ".mmo"))
          (key (format "%s:%d" (file-truename file) line)))
-    ;; Rebuild cache if we have none or the .mmo changed since last build.
-    (when (or (null mmix--address-table-mtime)
-              (time-less-p mmix--address-table-mtime
-                           (file-attribute-modification-time
-                            (file-attributes mmo))))
-      (mmix--build-address-table mmo))
-    (or (gethash key mmix--address-table)
-	(error "Not an executable instruction at line %d" line))))
+    (when (and (file-exists-p mmo)
+	       (file-newer-than-file-p mmo file))
+      ;; Rebuild cache if we have none or the .mmo changed since last build.
+      (when (or (null mmix--address-table-mtime)
+		(time-less-p mmix--address-table-mtime
+                             (file-attribute-modification-time
+                              (file-attributes mmo))))
+	(mmix--build-address-table mmo))
+      (gethash key mmix--address-table))))
 
 (defun mmix--line-for-address (file address)
   "Return line number for ADDRESS in FILE from cache.
@@ -229,6 +232,20 @@ Rebuilds cache if needed."
 ;;;; Unified breakpoint and tracepoint handling
 ;;;;
 
+
+;;
+;; Short note on how breakpoints and tracepoints are handled:
+;;
+;; We use overlays at the beginning of lines, which we call "markers". A
+;; marker is identified by its `mmix-marker` property.
+;;
+;; A marker can have `mmix-break` and/or `mmix-trace` properties to indicate
+;; whether a breakpoint or tracepoint is set. The function
+;; `mmix--update-marker-visuals` updates the visual representation in the
+;; fringe by setting the overlay's `before-string` property to display a
+;; fringe bitmap.
+;;
+
 (define-fringe-bitmap 'mmix-breakpoint
   (vector #b00111100
           #b01111110
@@ -274,86 +291,126 @@ Rebuilds cache if needed."
   '((t :foreground "gold"))
   "Fringe-face voor gecombineerde break-/tracepoints.")
 
-;; Marker struct
-(cl-defstruct mmix-marker overlay flags addr)
-;;   overlay – the overlay object at line start
-;;   flags   – plist :break / :trace booleans
-;;   addr    – integer address in MMIX memory
+;; Overlay helpers: treat overlays-with-property 'mmix-marker as the marker set
 
-(defvar mmix--markers (make-hash-table :test #'equal)
-  "Hash file:line -> `mmix-marker' table.")
+(defun mmix--marker-at-bol (&optional pos)
+  "Return the MMIX marker overlay at the beginning of line at POS, or nil.
 
-(defun mmix--update-marker-visuals (mkr)
-  "Refresh overlay icon and face for marker MKR, or delete if no flags."
-  (let* ((flags (mmix-marker-flags mkr))
-         (bmp   (cond ((and (plist-get flags :break) (plist-get flags :trace))
-                       'mmix-bp-tp)
-                      ((plist-get flags :break) 'mmix-breakpoint)
-                      ((plist-get flags :trace) 'mmix-tracepoint)
+If POS is not given, use (point)."
+  (save-excursion
+    (goto-char (or pos (point)))
+    (let* ((bol (line-beginning-position))
+           (ovs (overlays-in bol (+ bol 1))))
+      (seq-find (lambda (ov) (overlay-get ov 'mmix-marker)) ovs))))
+
+(defun mmix--new-marker-at-bol (&optional pos)
+  "Create and return a new MMIX marker overlay at beginning of line at POS.
+
+If POS is nil, use the current point.  The created overlay is set with
+properties: `mmix-marker', `evaporate', and `front-advance'."
+  (save-excursion
+    (goto-char (or pos (point)))
+    (let* ((bol (line-beginning-position))
+	   (new (make-overlay bol (1+ bol))))
+      (overlay-put new 'mmix-marker t)
+      (overlay-put new 'evaporate t)       ;; auto-remove if the text is deleted
+      (overlay-put new 'front-advance t)   ;; stick to BOL on inserts
+      new)))
+
+(defun mmix--markers-in-buffer (&optional buffer)
+  "Return a list of all MMIX marker overlays in BUFFER (default current buffer)."
+  (let ((buf (or buffer (current-buffer)))
+        res)
+    (with-current-buffer buf
+      (save-restriction
+        (widen)
+        (dolist (ov (overlays-in (point-min) (point-max)))
+          (when (overlay-get ov 'mmix-marker)
+            (push ov res)))))
+    res))
+
+
+(defun mmix--update-marker-visuals (ov)
+  "Refresh overlay icon and face for marker overlay OV, or delete if no flags."
+  (let* ((break (and ov (overlay-get ov 'mmix-break)))
+         (trace (and ov (overlay-get ov 'mmix-trace)))
+         (bmp   (cond ((and break trace) 'mmix-bp-tp)
+                      (break 'mmix-breakpoint)
+                      (trace 'mmix-tracepoint)
                       (t nil)))
-         (face  (cond ((and (plist-get flags :break) (plist-get flags :trace))
-                       'mmix-bp-tp-face)
-                      ((plist-get flags :break) 'mmix-breakpoint-face)
-                      ((plist-get flags :trace) 'mmix-tracepoint-face))))
-    (when (mmix-marker-overlay mkr)
-      (delete-overlay (mmix-marker-overlay mkr))
-      (setf (mmix-marker-overlay mkr) nil))
-    (when bmp
-      (let ((ov (make-overlay (line-beginning-position) (line-beginning-position))))
-        (overlay-put ov 'before-string
-                     (propertize " " 'display `(left-fringe ,bmp ,face)))
-        (overlay-put ov 'mmix-addr   (mmix-marker-addr mkr))
-        (overlay-put ov 'mmix-break  (plist-get flags :break))
-        (overlay-put ov 'mmix-trace  (plist-get flags :trace))
-        (setf (mmix-marker-overlay mkr) ov)))))
+         (face  (cond ((and break trace) 'mmix-bp-tp-face)
+                      (break 'mmix-breakpoint-face)
+                      (trace 'mmix-tracepoint-face))))
+    (cond
+     ((null ov) nil)
+     ((and (not break) (not trace))
+      (delete-overlay ov))
+     (t
+      (overlay-put ov 'before-string
+                   (propertize " " 'display `(left-fringe ,bmp ,face)))))))
+
 
 (defun mmix--toggle (pos type)
-  "Toggle TYPE (either :break or :trace) at POS, updating UI and simulator.
+  "Toggle TYPE (either :break or :trace) at POS.
 
-Breakpoints are set one tetrabyte (4-bytes) before, from the documentation:
+We update UI, placing an marker in the fringe.  If the simulator is running
+and we are not at an address line, we don't toggle.  If the simulator is
+not running, we do toggle, but know that when the simulator is started
+we might need to remove the toggle.
+
+We also update the simulator if it is running.  Keep in mind that we place the
+breakpoints one tetrabyte (4-bytes) before, from the documentation:
 `bx1000' causes a break in the simulation just *after* the tetrabyte in #1000
 is executed.  This is unexpected behaviour in modern debugging."
   (save-excursion
     (goto-char pos)
     (let* ((file (buffer-file-name))
            (line (line-number-at-pos))
-           (key  (format "%s:%d" file line))
-           (mkr  (or (gethash key mmix--markers)
-                     (make-mmix-marker :overlay nil
-                                       :flags nil
-                                       :addr (mmix--address-for-line file line))))
-           (old   (plist-get (mmix-marker-flags mkr) type)))
-      ;; Flip flag
-      (setf (mmix-marker-flags mkr)
-            (plist-put (mmix-marker-flags mkr) type (not old)))
-      ;; Communicate with simulator
-      (pcase (cons type old)
-        (`(:break . nil)
-	 (mmix--send-console-command (format "bx%x"
-					     (- (mmix-marker-addr mkr) 4))))
-        (`(:break . t)
-	 (mmix--send-console-command (format "b%x"
-					     (- (mmix-marker-addr mkr) 4))))
-        (`(:trace . nil)
-	 (mmix--send-console-command (format "t%x"
-					     (mmix-marker-addr mkr))))
-        (`(:trace . t)
-	 (mmix--send-console-command (format "u%x"
-					     (mmix-marker-addr mkr)))))
-      ;; Update visuals
-      (mmix--update-marker-visuals mkr)
-      ;; Store or drop marker
-      (if (or (plist-get (mmix-marker-flags mkr) :break)
-              (plist-get (mmix-marker-flags mkr) :trace))
-          (puthash key mkr mmix--markers)
-        (remhash key mmix--markers))
+           (bol  (line-beginning-position))
+           (ov   (or (mmix--marker-at-bol bol)
+                     (mmix--new-marker-at-bol bol)))
+           (flag (pcase type
+                   (:break 'mmix-break)
+                   (:trace 'mmix-trace)))
+           (old (overlay-get ov flag)))
+      (when (and (not old)
+		 (get-buffer-process (get-buffer "*MMIX-Interactive*"))
+		 (not (mmix--address-for-line file line)))
+	(error "Cannot set %s: not an executable instruciton at line %d"
+	       (symbol-name type)
+	       line))
+      ;; Flip desired state in overlay
+      (overlay-put ov flag (not old))
+      ;; Update visuals or delete overlay if both flags are now off
+      (mmix--update-marker-visuals ov)
+
+      ;; Best-effort talk to simulator (only if running and we can resolve)
+      (let* ((addr (mmix--address-for-line file line))
+             (proc (get-buffer-process (get-buffer "*MMIX-Interactive*"))))
+        (when proc
+          (pcase (cons type old)
+            (`(:break . nil) (when addr
+                               (mmix--send-console-command (format "bx%x"
+								   (- addr 4)))))
+            (`(:break . t)   (when addr
+                               (mmix--send-console-command (format "b%x"
+								   (- addr 4)))))
+            (`(:trace . nil) (when addr
+                               (mmix--send-console-command (format "t%x"
+								   addr))))
+            (`(:trace . t)   (when addr
+                               (mmix--send-console-command (format "u%x"
+								   addr)))))))
       ;; User feedback
-      (message "%s %s at %s:%d (addr %x)"
+      (message "%s %s at %s:%d%s"
                (capitalize (symbol-name type))
                (if old "removed" "set")
                (file-name-nondirectory file)
                line
-               (mmix-marker-addr mkr)))))
+               (if-let ((a (mmix--address-for-line file line)))
+                   (format " (addr %x)" a)
+                 " (pending)")))))
+
 
 (defun mmix-toggle-breakpoint (&optional pos)
   "Interactively toggle a breakpoint at POS or point."
@@ -375,25 +432,30 @@ EVENT is the mouse-click event supplied by Emacs."  (interactive "e")
     (with-current-buffer buf
       (mmix-toggle-breakpoint pos))))
 
-(defun mmix--set-initial-markers (mms-file)
-  "Resend break/trace commands for markers in MMS-FILE to simulator.
+(defun mmix--set-initial-markers ()
+  "Resend break/trace commands for markers in the buffer to simulator.
 
 Breakpoints are set one tetrabyte (4-bytes) before, from the documentation:
 `bx1000' causes a break in the simulation just *after* the tetrabyte in #1000
-is executed.  This is unexpected behaviour in modern debugging."
-  (let ((truename (file-truename mms-file)))
-    (maphash (lambda (_ mkr)
-               (when (and (mmix-marker-addr mkr)
-                          (mmix-marker-overlay mkr))
-                 (with-current-buffer (overlay-buffer (mmix-marker-overlay mkr))
-                   (when (string= (file-truename (buffer-file-name)) truename)
-                     (when (plist-get (mmix-marker-flags mkr) :break)
-                       (mmix--send-console-command
-			(format "bx%x" (- (mmix-marker-addr mkr) 4))))
-                     (when (plist-get (mmix-marker-flags mkr) :trace)
-                       (mmix--send-console-command
-			(format "t%x" (mmix-marker-addr mkr))))))))
-             mmix--markers)))
+is executed.  This is unexpected behaviour in modern debugging.
+
+When we notice here that the line is not pointing to an instruction
+we remove the overlay."
+    (dolist (ov (mmix--markers-in-buffer))
+      (save-excursion
+        (goto-char (overlay-start ov))
+        (let* ((line (line-number-at-pos))
+	       (mms-file (buffer-file-name))
+               (addr (mmix--address-for-line mms-file line)))
+          (if addr
+              (progn
+                (when (overlay-get ov 'mmix-break)
+                  (mmix--send-console-command (format "bx%x" (- addr 4))))
+                (when (overlay-get ov 'mmix-trace)
+                  (mmix--send-console-command (format "t%x" addr))))
+            (overlay-put ov 'mmix-break nil)
+            (overlay-put ov 'mmix-trace nil)
+            (mmix--update-marker-visuals ov))))))
 
 ;;;;
 ;;;; Debugging session management
@@ -535,11 +597,10 @@ Returns text that should appear in the comint buffer."
         (setq result (concat result ln "\n")))
        ;; Location indicator: "(... at location #...)"
        ((string-match "at location #\\([0-9a-fA-F]+\\)" ln)
-        (let* ((addr-hex (match-string 1 ln))
-               (addr (string-to-number addr-hex 16))
-               (line (mmix--line-for-address mmix--source-file addr)))
-          (when line
-            (mmix--show-execution-point mmix--source-file line)))
+        (when-let* ((addr-hex (match-string 1 ln))
+		    (addr (string-to-number addr-hex 16))
+		    (line (mmix--line-for-address mmix--source-file addr)))
+          (mmix--show-execution-point mmix--source-file line))
         (setq result (concat result ln "\n")))
        ;; prompt line indicates stop -> refresh registers
        ((string-match "^mmix> *$" ln)
@@ -584,7 +645,7 @@ Returns text that should appear in the comint buffer."
       (with-current-buffer source-buf
         (mmix-debug-mode 1))
       (mmix--build-address-table mmo-file)
-      (mmix--set-initial-markers mms-file)
+      (mmix--set-initial-markers)
       (display-buffer buf))))
 
 ;;;;
