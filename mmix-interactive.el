@@ -74,8 +74,14 @@
 (defvar-local mmix--source-file nil
   "Full pathname of the current MMIX source (.mms) file.")
 
+(defvar-local mmix--continued-p nil
+  "Non-nil after a continue command has been sent.")
+
 (defvar-local mmix--running-p nil
   "Non-nil while program is executing (between prompts).")
+
+(defvar-local mmix--suppress-output-p nil
+  "Non-nil to suppress output from the simulator.")
 
 ;;;;
 ;;;; Address cache
@@ -218,14 +224,16 @@ Rebuilds cache if needed."
 ;;;; Process helpers
 ;;;;
 
-(defun mmix--send-console-command (cmd)
-  "Send CMD plus newline to the current MMIX process."
+(defun mmix--send-console-command (cmd &optional silent-p)
+  "Send CMD plus newline to the current MMIX process.
+If SILENT-P is non-nil, do not echo the command in the buffer."
   (when-let* ((buf (get-buffer "*MMIX-Interactive*"))
               (proc (get-buffer-process buf)))
-    (with-current-buffer buf
-      (goto-char (process-mark proc))
-      (insert cmd "\n")
-      (set-marker (process-mark proc) (point)))
+    (unless silent-p
+      (with-current-buffer buf
+        (goto-char (process-mark proc))
+        (insert cmd "\n")
+        (set-marker (process-mark proc) (point))))
     (comint-send-string proc (concat cmd "\n"))))
 
 ;;;;
@@ -509,6 +517,9 @@ we remove the overlay."
 (defun mmix-interactive-continue ()
   "Continue MMIX simulation until halt or breakpoint."
   (interactive)
+  (when-let ((buf (get-buffer "*MMIX-Interactive*")))
+    (with-current-buffer buf
+      (setq mmix--continued-p t)))
   (mmix--send-console-command "c"))
 
 (defun mmix-interactive-show-stats ()
@@ -619,30 +630,37 @@ we remove the overlay."
   (add-hook 'comint-preoutput-filter-functions #'mmix--output-filter nil t))
 
 (defun mmix--output-filter (output)
-  "Process OUTPUT from MMIX, routing trace lines and updating UI.
-Returns text that should appear in the comint buffer."
+  "Process OUTPUT from MMIX, routing trace lines and updating UI."
   (let ((lines (split-string output "\n"))
         (result ""))
     (dolist (ln lines)
-      (cond
-       ;; source line indicator from `mmix -i`: "line 42: ..."
-       ((string-match "^line \\([0-9]+\\):.*$" ln)
-        (let ((num (string-to-number (match-string 1 ln))))
-          (mmix--pulse-line-in-source mmix--source-file num))
-        (setq result (concat result ln "\n")))
-       ;; Location indicator: "(... at location #...)"
-       ((string-match "at location #\\([0-9a-fA-F]+\\)" ln)
-        (when-let* ((addr-hex (match-string 1 ln))
-		    (addr (string-to-number addr-hex 16))
-		    (line (mmix--line-for-address mmix--source-file addr)))
-          (mmix--show-execution-point mmix--source-file line))
-        (setq result (concat result ln "\n")))
-       ;; prompt line indicates stop -> refresh registers
-       ((string-match "^mmix> *$" ln)
-        (setq mmix--running-p nil)
-        (setq result (concat result ln)))
-       ;; default: pass through
-       (t (setq result (concat result ln "\n")))))
+      (let ((is-prompt (string-match-p "^mmix> *$" ln))
+            (append-to-result t))
+        ;; --- Part 1: State transitions and side-effects ---
+        (cond
+         (is-prompt
+          (setq mmix--running-p nil)
+          (if mmix--continued-p
+              (progn
+                (setq mmix--continued-p nil)
+                (setq mmix--suppress-output-p t)
+                (setq append-to-result nil) ; Swallow this prompt
+                (mmix--send-console-command "s" t))
+            ;; This is the prompt after 's', or a normal one.
+            ;; We should stop suppressing now.
+            (setq mmix--suppress-output-p nil)))
+         ((string-match "^line \\([0-9]+\\):.*$" ln)
+          (let ((num (string-to-number (match-string 1 ln))))
+            (mmix--pulse-line-in-source mmix--source-file num)))
+         ((string-match "at location #\\([0-9a-fA-F]+\\)" ln)
+          (when-let* ((addr-hex (match-string 1 ln))
+                      (addr (string-to-number addr-hex 16))
+                      (line (mmix--line-for-address mmix--source-file addr)))
+            (mmix--show-execution-point mmix--source-file line))))
+
+        ;; --- Part 2: Append to result if needed ---
+        (when (and append-to-result (not mmix--suppress-output-p))
+          (setq result (concat result ln (if is-prompt "" "\n"))))))
     result))
 
 ;;;;
