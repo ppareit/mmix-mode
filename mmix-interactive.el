@@ -632,12 +632,17 @@ we remove the overlay."
 
 
 (define-minor-mode mmix-debug-mode
-  "Minor mode for MMIX source buffers during debugging."
+  "Minor mode for MMIX source buffers during debugging.
+
+We manually set the `mode-name', using :lighter would be better,
+but then we don't see the change."
   :init-value nil
-  :lighter " Dbg"
   :keymap mmix-debug-mode-map
   (if mmix-debug-mode
-      (setq-local buffer-read-only t)
+      (progn
+	(setq-local buffer-read-only t)
+	(setq mode-name "MMIX Dbg"))
+    (setq mode-name "MMIX")
     (setq-local buffer-read-only nil)
     (set-marker mmix--overlay-arrow-position nil)
     (mmix--remove-halted-point)
