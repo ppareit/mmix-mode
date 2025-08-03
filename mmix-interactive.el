@@ -615,6 +615,29 @@ we remove the overlay."
   (interactive)
   (mmix--send-console-command "B"))
 
+(defconst mmix-interactive--dynamic-register-help-string
+  "$<n><t>   show or set dynamic register n in format t
+
+    <t>   is ! (decimal)
+          or . (floating)
+          or # (hex)
+          or \" (string)
+          or <empty> (previous <t>)
+          or =<value> (change value)"
+  "Help string for the dynamic register prompt.")
+
+(defun mmix-interactive-show-dynamic-register ()
+  "Show or set a dynamic register.
+With `?' shows help and reprompts."
+  (interactive)
+  (let* ((prompt "Query (or ?): ")
+	 (minibuffer-help-form mmix-interactive--dynamic-register-help-string)
+	 (help-event-list (cons ?? help-event-list))
+         (query (read-string prompt)))
+    (unless (string-prefix-p "$" query)
+      (setq query (format "$%s" query)))
+    (mmix--send-console-command query)))
+
 (defvar mmix-debug-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") #'mmix-interactive-trace-one-instruction)
@@ -630,6 +653,7 @@ we remove the overlay."
     (define-key map (kbd "P") #'mmix-interactive-set-pool-segment)
     (define-key map (kbd "S") #'mmix-interactive-set-stack-segment)
     (define-key map (kbd "B") #'mmix-interactive-show-breakpoints)
+    (define-key map (kbd "$") #'mmix-interactive-show-dynamic-register)
     (define-key map (kbd "b") #'mmix-toggle-breakpoint)
     (define-key map (kbd "@") #'mmix-interactive-goto-location)
     map))
