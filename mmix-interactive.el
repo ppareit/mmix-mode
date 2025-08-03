@@ -291,6 +291,10 @@ Rebuilds cache if needed."
   '((t :foreground "gold"))
   "Fringe-face voor gecombineerde break-/tracepoints.")
 
+(defface mmix-initial-breakpoint-face
+  '((t :foreground "coral"))
+  "Face for the initial MMIX breakpoint at `Main'.")
+
 ;; Overlay helpers: treat overlays-with-property 'mmix-marker as the marker set
 
 (defun mmix--marker-at-bol (&optional pos)
@@ -332,18 +336,21 @@ properties: `mmix-marker', `evaporate', and `front-advance'."
 
 (defun mmix--update-marker-visuals (ov)
   "Refresh overlay icon and face for marker overlay OV, or delete if no flags."
-  (let* ((break (and ov (overlay-get ov 'mmix-break)))
-         (trace (and ov (overlay-get ov 'mmix-trace)))
-         (bmp   (cond ((and break trace) 'mmix-bp-tp)
-                      (break 'mmix-breakpoint)
-                      (trace 'mmix-tracepoint)
-                      (t nil)))
-         (face  (cond ((and break trace) 'mmix-bp-tp-face)
-                      (break 'mmix-breakpoint-face)
-                      (trace 'mmix-tracepoint-face))))
+  (let* ((initial (and ov (overlay-get ov 'mmix-initial-break)))
+         (break   (and ov (overlay-get ov 'mmix-break)))
+         (trace   (and ov (overlay-get ov 'mmix-trace)))
+         (bmp     (cond ((and break trace) 'mmix-bp-tp)
+			(break             'mmix-breakpoint)
+			(initial           'mmix-breakpoint)
+			(trace             'mmix-tracepoint)
+			(t nil)))
+         (face    (cond ((and break trace) 'mmix-bp-tp-face)
+			(break             'mmix-breakpoint-face)
+			(trace             'mmix-tracepoint-face)
+			(initial           'mmix-initial-breakpoint-face))))
     (cond
      ((null ov) nil)
-     ((and (not break) (not trace))
+     ((and (not break) (not trace) (not initial))
       (delete-overlay ov))
      (t
       (overlay-put ov 'before-string
@@ -379,6 +386,8 @@ is executed.  This is unexpected behaviour in modern debugging."
 	(error "Cannot set %s: not an executable instruciton at line %d"
 	       (symbol-name type)
 	       line))
+      (when (overlay-get ov 'mmix-initial-break)
+        (error "Simulator always breaks at `Main'"))
       ;; Flip desired state in overlay
       (overlay-put ov flag (not old))
       ;; Update visuals or delete overlay if both flags are now off
@@ -425,12 +434,38 @@ is executed.  This is unexpected behaviour in modern debugging."
 (defun mmix-toggle-breakpoint-with-mouse (event)
   "Toggle a breakpoint on the line that was clicked in the left fringe.
 
-EVENT is the mouse-click event supplied by Emacs."  (interactive "e")
+EVENT is the mouse-click event supplied by Emacs."
+  (interactive "e")
   (let* ((posn  (event-start event))
          (buf   (window-buffer (posn-window posn)))
          (pos   (posn-point posn)))
     (with-current-buffer buf
       (mmix-toggle-breakpoint pos))))
+
+(defun mmix--set-main-marker ()
+  "Place a special marker on the `Main' label line.
+This marker is visual only, to show where the simulator will initially
+break.  It does not set a breakpoint in the simulator.  If a user-defined
+marker already exists, this marker is layered on top, but the user's
+marker visuals will take precedence."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward "^Main\\>" nil t)
+      (let* ((file (buffer-file-name))
+             (line (line-number-at-pos))
+             (ov (or (mmix--marker-at-bol)
+                     (mmix--new-marker-at-bol))))
+        ;; We only set it if it corresponds to an address.
+        (when (mmix--address-for-line file line)
+          (overlay-put ov 'mmix-initial-break t)
+          (mmix--update-marker-visuals ov))))))
+
+(defun mmix--remove-main-marker ()
+  "Remove any `mmix-initial-break' markers from the buffer."
+  (dolist (ov (mmix--markers-in-buffer))
+    (when (overlay-get ov 'mmix-initial-break)
+      (overlay-put ov 'mmix-initial-break nil)
+      (mmix--update-marker-visuals ov))))
 
 (defun mmix--set-initial-markers ()
   "Resend break/trace commands for markers in the buffer to simulator.
@@ -553,7 +588,7 @@ we remove the overlay."
       (setq-local buffer-read-only t)
     (setq-local buffer-read-only nil)
     (set-marker mmix--overlay-arrow-position nil)
-    ))
+    (mmix--remove-main-marker)))
 
 (defun mmix-interactive-sentinel (proc _)
   "Cleanup after MMIX interactive process PROC terminates."
@@ -646,6 +681,7 @@ Returns text that should appear in the comint buffer."
         (mmix-debug-mode 1))
       (mmix--build-address-table mmo-file)
       (mmix--set-initial-markers)
+      (mmix--set-main-marker)
       (display-buffer buf))))
 
 ;;;;
