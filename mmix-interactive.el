@@ -184,6 +184,31 @@ Rebuilds cache if needed."
 (defvar mmix--overlay-arrow-position nil
   "Marker used by `mmix--show-execution-point' for the overlay arrow.")
 
+(defvar mmix--halted-point-overlay nil
+  "Overlay for the halted-at point.
+This variable is made buffer-local in `mmix-debug-mode' buffers.")
+
+(defun mmix--remove-halted-point ()
+  "Remove the halted point indicator overlay, if any."
+  (when (overlayp mmix--halted-point-overlay)
+    (delete-overlay mmix--halted-point-overlay)
+    (setq mmix--halted-point-overlay nil)))
+
+(defun mmix--show-halted-point (file line)
+  "Show halted point at LINE in FILE with a fringe rectangle."
+  (when (and file line (integerp line) (> line 0))
+    (let* ((buf (find-file-noselect file))
+           (win (or (get-buffer-window buf) (display-buffer buf))))
+      (with-selected-window win
+        (setq-local overlay-arrow-position nil) ; Remove execution arrow.
+        (mmix--remove-halted-point) ; Remove previous halted point overlay.
+        (goto-char (point-min))
+        (forward-line (1- line))
+        (let ((ov (make-overlay (line-beginning-position) (line-beginning-position))))
+          (overlay-put ov 'before-string
+                       (propertize " " 'display '(left-fringe mmix-halted-point mmix-halted-point-face)))
+          (setq-local mmix--halted-point-overlay ov))))))
+
 (defun mmix--show-execution-point (file line)
   "Show execution point at LINE in FILE with an overlay arrow."
   (when (and file line (integerp line) (> line 0))
@@ -193,6 +218,7 @@ Rebuilds cache if needed."
            (win (or (get-buffer-window buf)
                     (display-buffer buf))))
       (with-selected-window win
+        (mmix--remove-halted-point)
         ;; Move point to the requested line
         (goto-char (point-min))
         (forward-line (1- line))
@@ -302,6 +328,21 @@ If SILENT-P is non-nil, do not echo the command in the buffer."
 (defface mmix-initial-breakpoint-face
   '((t :foreground "coral"))
   "Face for the initial MMIX breakpoint at `Main'.")
+
+(define-fringe-bitmap 'mmix-halted-point
+  (vector #b00000000
+          #b00000000
+          #b00000000
+          #b00000000
+          #b00000000
+          #b11111111
+          #b11111111
+          #b11111111)
+  8 8 'center)
+
+(defface mmix-halted-point-face
+  '((t :foreground "white"))
+  "Face for MMIX halted point in the fringe.")
 
 ;; Overlay helpers: treat overlays-with-property 'mmix-marker as the marker set
 
@@ -599,6 +640,7 @@ we remove the overlay."
       (setq-local buffer-read-only t)
     (setq-local buffer-read-only nil)
     (set-marker mmix--overlay-arrow-position nil)
+    (mmix--remove-halted-point)
     (mmix--remove-main-marker)))
 
 (defun mmix-interactive-sentinel (proc _)
@@ -636,7 +678,6 @@ we remove the overlay."
     (dolist (ln lines)
       (let ((is-prompt (string-match-p "^mmix> *$" ln))
             (append-to-result t))
-        ;; --- Part 1: State transitions and side-effects ---
         (cond
          (is-prompt
           (setq mmix--running-p nil)
@@ -652,13 +693,14 @@ we remove the overlay."
          ((string-match "^line \\([0-9]+\\):.*$" ln)
           (let ((num (string-to-number (match-string 1 ln))))
             (mmix--pulse-line-in-source mmix--source-file num)))
-         ((string-match "at location #\\([0-9a-fA-F]+\\)" ln)
-          (when-let* ((addr-hex (match-string 1 ln))
+         ((string-match "\\(halted\\|now\\)? *at location #\\([0-9a-fA-F]+\\)" ln)
+          (when-let* ((state (match-string 1 ln))
+		      (addr-hex (match-string 2 ln))
                       (addr (string-to-number addr-hex 16))
                       (line (mmix--line-for-address mmix--source-file addr)))
-            (mmix--show-execution-point mmix--source-file line))))
-
-        ;; --- Part 2: Append to result if needed ---
+            (pcase state
+              ("halted" (mmix--show-halted-point mmix--source-file line))
+              ("now" (mmix--show-execution-point mmix--source-file line))))))
         (when (and append-to-result (not mmix--suppress-output-p))
           (setq result (concat result ln (if is-prompt "" "\n"))))))
     result))
