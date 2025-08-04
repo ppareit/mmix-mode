@@ -830,8 +830,15 @@ but then we don't see the change."
   (setq-local comint-move-point-for-output t)
   (setq-local comint-scroll-show-maximum-output t)
 
-  ;; Output filter
+  ;; Input/Output filters
+  (add-hook 'comint-input-filter-functions #'mmix--input-filter nil t)
   (add-hook 'comint-preoutput-filter-functions #'mmix--output-filter nil t))
+
+(defun mmix--input-filter (input)
+  "Process INPUT to MMIX from user."
+  (cond ((string-match-p "^@" input)
+	 (setq mmix--refresh-state-on-prompt-p t)))
+  input)
 
 (defun mmix--output-filter (output)
   "Process OUTPUT from MMIX, routing trace lines and updating UI."
