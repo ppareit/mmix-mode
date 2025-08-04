@@ -615,6 +615,18 @@ we remove the overlay."
   (interactive)
   (mmix--send-console-command "B"))
 
+(defun mmix--read-and-send-command (prompt help-string prefix)
+  "Read command from user with help and send to MMIX process.
+PROMPT is the minibuffer prompt string.
+HELP-STRING is the help text to display on `?`.
+PREFIX is the command prefix to ensure."
+  (let* ((minibuffer-help-form help-string)
+         (help-event-list (cons ?? help-event-list))
+         (query (read-string prompt)))
+    (unless (string-prefix-p prefix query)
+      (setq query (format "%s%s" prefix query)))
+    (mmix--send-console-command query)))
+
 (defconst mmix-interactive--dynamic-register-help-string
   "$<n><t>   show or set dynamic register n in format t
 
@@ -630,13 +642,9 @@ we remove the overlay."
   "Show or set a dynamic register.
 With `?' shows help and reprompts."
   (interactive)
-  (let* ((prompt "Query (or ?): ")
-	 (minibuffer-help-form mmix-interactive--dynamic-register-help-string)
-	 (help-event-list (cons ?? help-event-list))
-         (query (read-string prompt)))
-    (unless (string-prefix-p "$" query)
-      (setq query (format "$%s" query)))
-    (mmix--send-console-command query)))
+  (mmix--read-and-send-command "Query (or ?): "
+                               mmix-interactive--dynamic-register-help-string
+                               "$"))
 
 (defconst mmix-interactive--local-register-help-string
   "l<n><t>   show or set local register n in format t
@@ -653,13 +661,9 @@ With `?' shows help and reprompts."
   "Show or set a local register.
 With `?' shows help and reprompts."
   (interactive)
-  (let* ((prompt "Query (or ?): ")
-	 (minibuffer-help-form mmix-interactive--local-register-help-string)
-	 (help-event-list (cons ?? help-event-list))
-         (query (read-string prompt)))
-    (unless (string-prefix-p "l" query)
-      (setq query (format "l%s" query)))
-    (mmix--send-console-command query)))
+  (mmix--read-and-send-command "Query (or ?): "
+                               mmix-interactive--local-register-help-string
+                               "l"))
 
 (defconst mmix-interactive--global-register-help-string
   "g<n><t>   show or set global register n in format t
@@ -676,13 +680,9 @@ With `?' shows help and reprompts."
   "Show or set a global register.
 With `?' shows help and reprompts."
   (interactive)
-  (let* ((prompt "Query (or ?): ")
-	 (minibuffer-help-form mmix-interactive--global-register-help-string)
-	 (help-event-list (cons ?? help-event-list))
-         (query (read-string prompt)))
-    (unless (string-prefix-p "g" query)
-      (setq query (format "g%s" query)))
-    (mmix--send-console-command query)))
+  (mmix--read-and-send-command "Query (or ?): "
+                               mmix-interactive--global-register-help-string
+                               "g"))
 
 (defconst mmix-interactive--memory-help-string
   "M<x><t>   set and/or show memory octabyte in format t
@@ -699,13 +699,9 @@ With `?' shows help and reprompts."
   "Show or set a memory octabyte.
 With `?' shows help and reprompts."
   (interactive)
-  (let* ((prompt "Query (or ?): ")
-	 (minibuffer-help-form mmix-interactive--memory-help-string)
-	 (help-event-list (cons ?? help-event-list))
-         (query (read-string prompt)))
-    (unless (string-prefix-p "M" query)
-      (setq query (format "M%s" query)))
-    (mmix--send-console-command query)))
+  (mmix--read-and-send-command "Query (or ?): "
+                               mmix-interactive--memory-help-string
+                               "M"))
 
 (defconst mmix-interactive--additional-memory-help-string
   "+<n><t>   show or set n additional octabytes in format t
@@ -722,13 +718,9 @@ With `?' shows help and reprompts."
   "Show or set additional memory octabytes.
 With `?' shows help and reprompts."
   (interactive)
-  (let* ((prompt "Query (or ?): ")
-	 (minibuffer-help-form mmix-interactive--additional-memory-help-string)
-	 (help-event-list (cons ?? help-event-list))
-         (query (read-string prompt)))
-    (unless (string-prefix-p "+" query)
-      (setq query (format "+%s" query)))
-    (mmix--send-console-command query)))
+  (mmix--read-and-send-command "Query (or ?): "
+                               mmix-interactive--additional-memory-help-string
+                               "+"))
 
 (defvar mmix-debug-mode-map
   (let ((map (make-sparse-keymap)))
