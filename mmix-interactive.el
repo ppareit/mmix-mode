@@ -748,18 +748,37 @@ but then we don't see the change."
   (interactive)
   (let* ((mms-file (buffer-file-name))
          (mmo-file (concat (file-name-sans-extension mms-file) ".mmo")))
+    ;; Check if we have a good source and object files
     (when (not (and mms-file (string-match-p "\\.mms\\'" mms-file)))
       (error "Not a .mms file buffer"))
     (when (buffer-modified-p)
       (error "Buffer %s needs to be saved first"
-	     (file-name-nondirectory mms-file)))
+  	     (file-name-nondirectory mms-file)))
     (when (not (file-exists-p mmo-file))
       (error "Object file %s does not exist, assemble first"
-	     (file-name-nondirectory mmo-file)))
+  	     (file-name-nondirectory mmo-file)))
     (when (file-newer-than-file-p mms-file mmo-file)
       (error "Source file %s is newer than object file %s, assemble first"
              (file-name-nondirectory mms-file)
              (file-name-nondirectory mmo-file)))
+    ;; Check for existing interactive session
+    (when-let* ((buf (get-buffer "*MMIX-Interactive*"))
+		(proc (get-buffer-process buf))
+		(_ (process-live-p proc)))
+      (let ((proc-mmo-file (process-get proc 'mmix-mmo-file)))
+        (if (equal mmo-file proc-mmo-file)
+            (progn
+              (display-buffer buf)
+              (user-error "A debugging session for %s is already active"
+                          (file-name-nondirectory mmo-file)))
+          (unless (y-or-n-p
+                   (format (concat "A debug session for %s is running."
+				   "Kill it and start one for %s? ")
+                           (file-name-nondirectory (or proc-mmo-file
+						       "an unknown file"))
+                           (file-name-nondirectory mmo-file)))
+            (user-error "Aborted"))
+          (delete-process proc))))
     (let* ((buf (make-comint "MMIX-Interactive"
                              mmix-interactive-executable nil
                              "-i" "-l" mmo-file))
@@ -770,6 +789,7 @@ but then we don't see the change."
         (setq mmix--source-file mms-file))
       (set-process-sentinel proc #'mmix-interactive-sentinel)
       (process-put proc 'mmix-source-buffer source-buf)
+      (process-put proc 'mmix-mmo-file mmo-file)
       (with-current-buffer source-buf
         (mmix-debug-mode 1))
       (mmix--build-address-table mmo-file)
