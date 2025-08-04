@@ -60,6 +60,7 @@
                (file-name-directory (or load-file-name ""))))
 (require 'mmix-mode)
 (require 'mmo-mode)
+(require 'mmix-describe)
 
 (defgroup mmix-interactive nil
   "Interactive MMIX debugger."
@@ -684,6 +685,32 @@ With `?' shows help and reprompts."
                                mmix-interactive--global-register-help-string
                                "g"))
 
+(defvar mmix-interactive--special-register-help-string
+  (let* ((base-help "r<name><t>   show or set special register <name> in format t
+
+    <t>   is ! (decimal)
+          or . (floating)
+          or # (hex)
+          or \" (string)
+          or <empty> (previous <t>)
+          or =<value> (change value)
+
+Available special registers (detailed):
+")
+         (registers (seq-filter (lambda (d) (eq (mmix-description-type d) 'register))
+                                (hash-table-values mmix-description-table)))
+         (reg-lines (mapcar #'mmix-describe-register-1line registers)))
+    (concat base-help "\n" (apply #'concat (reverse reg-lines))))
+  "Help string for the special register prompt.")
+
+(defun mmix-interactive-show-special-register ()
+  "Show or set a special register.
+With `?' shows help and reprompts."
+  (interactive)
+  (mmix--read-and-send-command "Query (or ?): "
+                               mmix-interactive--special-register-help-string
+                               "r"))
+
 (defconst mmix-interactive--memory-help-string
   "M<x><t>   set and/or show memory octabyte in format t
 
@@ -740,6 +767,7 @@ With `?' shows help and reprompts."
     (define-key map (kbd "$") #'mmix-interactive-show-dynamic-register)
     (define-key map (kbd "g") #'mmix-interactive-show-global-register)
     (define-key map (kbd "l") #'mmix-interactive-show-local-register)
+    (define-key map (kbd "r") #'mmix-interactive-show-special-register)
     (define-key map (kbd "M") #'mmix-interactive-show-memory)
     (define-key map (kbd "+") #'mmix-interactive-show-additional-memory)
     (define-key map (kbd "b") #'mmix-toggle-breakpoint)
