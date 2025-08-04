@@ -638,6 +638,98 @@ With `?' shows help and reprompts."
       (setq query (format "$%s" query)))
     (mmix--send-console-command query)))
 
+(defconst mmix-interactive--local-register-help-string
+  "l<n><t>   show or set local register n in format t
+
+    <t>   is ! (decimal)
+          or . (floating)
+          or # (hex)
+          or \" (string)
+          or <empty> (previous <t>)
+          or =<value> (change value)"
+  "Help string for the local register prompt.")
+
+(defun mmix-interactive-show-local-register ()
+  "Show or set a local register.
+With `?' shows help and reprompts."
+  (interactive)
+  (let* ((prompt "Query (or ?): ")
+	 (minibuffer-help-form mmix-interactive--local-register-help-string)
+	 (help-event-list (cons ?? help-event-list))
+         (query (read-string prompt)))
+    (unless (string-prefix-p "l" query)
+      (setq query (format "l%s" query)))
+    (mmix--send-console-command query)))
+
+(defconst mmix-interactive--global-register-help-string
+  "g<n><t>   show or set global register n in format t
+
+    <t>   is ! (decimal)
+          or . (floating)
+          or # (hex)
+          or \" (string)
+          or <empty> (previous <t>)
+          or =<value> (change value)"
+  "Help string for the global register prompt.")
+
+(defun mmix-interactive-show-global-register ()
+  "Show or set a global register.
+With `?' shows help and reprompts."
+  (interactive)
+  (let* ((prompt "Query (or ?): ")
+	 (minibuffer-help-form mmix-interactive--global-register-help-string)
+	 (help-event-list (cons ?? help-event-list))
+         (query (read-string prompt)))
+    (unless (string-prefix-p "g" query)
+      (setq query (format "g%s" query)))
+    (mmix--send-console-command query)))
+
+(defconst mmix-interactive--memory-help-string
+  "M<x><t>   set and/or show memory octabyte in format t
+
+    <t>   is ! (decimal)
+          or . (floating)
+          or # (hex)
+          or \" (string)
+          or <empty> (previous <t>)
+          or =<value> (change value)"
+  "Help string for the memory octabyte prompt.")
+
+(defun mmix-interactive-show-memory ()
+  "Show or set a memory octabyte.
+With `?' shows help and reprompts."
+  (interactive)
+  (let* ((prompt "Query (or ?): ")
+	 (minibuffer-help-form mmix-interactive--memory-help-string)
+	 (help-event-list (cons ?? help-event-list))
+         (query (read-string prompt)))
+    (unless (string-prefix-p "M" query)
+      (setq query (format "M%s" query)))
+    (mmix--send-console-command query)))
+
+(defconst mmix-interactive--additional-memory-help-string
+  "+<n><t>   show or set n additional octabytes in format t
+
+    <t>   is ! (decimal)
+          or . (floating)
+          or # (hex)
+          or \" (string)
+          or <empty> (previous <t>)
+          or =<value> (change value)"
+  "Help string for the additional octabytes prompt.")
+
+(defun mmix-interactive-show-additional-memory ()
+  "Show or set additional memory octabytes.
+With `?' shows help and reprompts."
+  (interactive)
+  (let* ((prompt "Query (or ?): ")
+	 (minibuffer-help-form mmix-interactive--additional-memory-help-string)
+	 (help-event-list (cons ?? help-event-list))
+         (query (read-string prompt)))
+    (unless (string-prefix-p "+" query)
+      (setq query (format "+%s" query)))
+    (mmix--send-console-command query)))
+
 (defvar mmix-debug-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") #'mmix-interactive-trace-one-instruction)
@@ -654,6 +746,10 @@ With `?' shows help and reprompts."
     (define-key map (kbd "S") #'mmix-interactive-set-stack-segment)
     (define-key map (kbd "B") #'mmix-interactive-show-breakpoints)
     (define-key map (kbd "$") #'mmix-interactive-show-dynamic-register)
+    (define-key map (kbd "g") #'mmix-interactive-show-global-register)
+    (define-key map (kbd "l") #'mmix-interactive-show-local-register)
+    (define-key map (kbd "M") #'mmix-interactive-show-memory)
+    (define-key map (kbd "+") #'mmix-interactive-show-additional-memory)
     (define-key map (kbd "b") #'mmix-toggle-breakpoint)
     (define-key map (kbd "@") #'mmix-interactive-goto-location)
     map))
