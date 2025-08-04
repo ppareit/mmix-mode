@@ -256,7 +256,9 @@ This variable is made buffer-local in `mmix-debug-mode' buffers.")
 
 Accepts keyword arguments ARGS:
   :silent    — if non-nil, do not echo the command
-  :refresh   — if non-nil, schedule UI refresh after command completes."
+  :refresh   — if non-nil, schedule UI refresh after command completes.
+
+When not running :silent, we will make sure that the window is displayed."
   (let ((silent-p (plist-get args :silent))
         (refresh-p (plist-get args :refresh)))
     (when-let* ((buf (get-buffer "*MMIX-Interactive*"))
@@ -265,6 +267,7 @@ Accepts keyword arguments ARGS:
         (with-current-buffer buf
           (setq mmix--refresh-state-on-prompt-p t)))
       (unless silent-p
+	(display-buffer buf)
         (with-current-buffer buf
           (goto-char (process-mark proc))
           (insert cmd "\n")
@@ -815,9 +818,18 @@ but then we don't see the change."
 (define-derived-mode mmix-interactive-mode comint-mode "MMIX-Dbg"
   "Major mode for interacting with the MMIX simulator."
   :group 'mmix-interactive
+
+  ;; Prompt settings
   (setq comint-prompt-regexp "^mmix> ")
   (setq comint-use-prompt-regexp t)
   (setq comint-prompt-read-only nil)
+
+  ;; Auto-scroll
+  (setq-local comint-scroll-to-bottom-on-input t)
+  (setq-local comint-scroll-to-bottom-on-output t)
+  (setq-local comint-move-point-for-output t)
+  (setq-local comint-scroll-show-maximum-output t)
+
   ;; Output filter
   (add-hook 'comint-preoutput-filter-functions #'mmix--output-filter nil t))
 
