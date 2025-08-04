@@ -620,10 +620,11 @@ we remove the overlay."
   "Read command from user with help and send to MMIX process.
 PROMPT is the minibuffer prompt string.
 HELP-STRING is the help text to display on `?`.
-PREFIX is the command prefix to ensure."
+PREFIX is the command prefix to ensure,
+       which we also display as initial input."
   (let* ((minibuffer-help-form help-string)
          (help-event-list (cons ?? help-event-list))
-         (query (read-string prompt)))
+         (query (read-string prompt prefix)))
     (unless (string-prefix-p prefix query)
       (setq query (format "%s%s" prefix query)))
     (mmix--send-console-command query)))
