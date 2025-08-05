@@ -896,8 +896,8 @@ but then we don't see the change."
 (defun mmix--input-filter (input)
   "Process INPUT to MMIX from user.
 
-@ (go to location) needs to refresh the state,
-                   so the instruction pointer is synced.
+@ (go to location) and c (continue) need to refresh the state, so
+                                    the instruction pointer is synced.
 
 bx, b, t, u is setting/removing breakpoint/tracepoint,
             the address will always be hex,
@@ -906,6 +906,10 @@ bx, b, t, u is setting/removing breakpoint/tracepoint,
   (cond
    ;; Keep existing @ behavior: schedule a quick 's' to refresh location/arrow.
    ((string-match-p "^@" input)
+    (setq mmix--refresh-state-on-prompt-p t))
+
+   ;; `c' (continue) also needs a refresh to update the execution point.
+   ((string-match-p "^c\\b" input)
     (setq mmix--refresh-state-on-prompt-p t))
 
    ;; User sets a breakpoint: bx <addr>.
