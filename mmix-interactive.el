@@ -88,11 +88,19 @@
 ;;;; Address cache
 ;;;;
 
-(defvar mmix--address-table (make-hash-table :test #'equal)
-  "Cache mapping truename:line -> address integer.")
 
-(defvar mmix--address-to-line-info-table (make-hash-table)
-  "Cache mapping address integer -> truename:line.")
+;; Implementation note:
+;; A location we see as a cons (FILE . LINE). So in the following
+;; we might sometimes say we return a location, but this is then
+;; always a pair (FILE . LINE).  We store not only the line number
+;; but also the file, as more advanced assembelers, like gnu-as
+;; might be able to assemble multiple .mms files to one .mmo file.
+
+(defvar mmix--address-table (make-hash-table :test #'equal)
+  "Cache mapping location cons (FILE . LINE) -> address integer.")
+
+(defvar mmix--address-to-location-table (make-hash-table)
+  "Cache mapping address integer -> location cons (FILE . LINE).")
 
 (defvar mmix--address-table-mtime nil
   "Modification time of the .mmo file used to build the address caches.")
@@ -100,7 +108,7 @@
 (defun mmix--build-address-table (mmo-file)
   "Parse MMO-FILE with mmotype and fill the address caches."
   (clrhash mmix--address-table)
-  (clrhash mmix--address-to-line-info-table)
+  (clrhash mmix--address-to-location-table)
   (let ((re-full  (rx bol
                       (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
                       "(\"" (group (*? (not (any "\"")))) "\", line "
@@ -115,27 +123,25 @@
       (goto-char (point-min))
       (while (not (eobp))
         (cond
+         ;; ADDRESS: MEMORY (FILENAME, line N)
          ((looking-at re-full)
-          (let ((addr  (match-string 1))
-                (src   (file-truename (match-string 2)))
-                (line  (match-string 3)))
+          (let* ((addr-hex (match-string 1))
+                 (src      (file-truename (match-string 2)))
+                 (line-num (string-to-number (match-string 3)))
+                 (addr     (string-to-number addr-hex 16))
+                 (loc      (cons src line-num)))
             (setq current-src src)
-            (puthash (format "%s:%s" src line)
-                     (string-to-number addr 16)
-                     mmix--address-table)
-            (puthash (string-to-number addr 16)
-                     (format "%s:%s" src line)
-                     mmix--address-to-line-info-table)))
+            (puthash loc addr mmix--address-table)
+            (puthash addr loc mmix--address-to-location-table)))
+         ;; ADDRESS: MEMORY (line N)
          ((looking-at re-short)
-          (let ((addr (match-string 1))
-                (line (match-string 2)))
-            (when current-src
-              (puthash (format "%s:%s" current-src line)
-                       (string-to-number addr 16)
-                       mmix--address-table)
-              (puthash (string-to-number addr 16)
-                       (format "%s:%s" current-src line)
-                       mmix--address-to-line-info-table)))))
+          (let* ((addr-hex (match-string 1))
+                 (line-num (string-to-number (match-string 2))))
+            (when current-src   ;; if nil, we could use mms file?
+              (let* ((addr (string-to-number addr-hex 16))
+                     (loc  (cons current-src line-num)))
+                (puthash loc addr mmix--address-table)
+                (puthash addr loc mmix--address-to-location-table))))))
         (forward-line 1)))
     (setq mmix--address-table-mtime
           (file-attribute-modification-time (file-attributes mmo-file)))))
@@ -144,39 +150,39 @@
   "Return address of LINE in FILE from the cache, rebuilding if needed.
 
 Return nil when:
- - no address corresponds to the given line (e.g., it's a blank
-              line, a comment, or contains a pseudo-instruction)
- - the mmo file is non existend of out of sync"
+ - no address corresponds to the given line (e.g., it's a blank line,
+   a comment, or contains a pseudo-instruction)
+ - the mmo file is non existent or out of sync"
   (let* ((mmo (concat (file-name-sans-extension file) ".mmo"))
-         (key (format "%s:%d" (file-truename file) line)))
+         (key (cons (file-truename file) line)))
     (when (and (file-exists-p mmo)
-	       (file-newer-than-file-p mmo file))
+               (file-newer-than-file-p mmo file))
       ;; Rebuild cache if we have none or the .mmo changed since last build.
       (when (or (null mmix--address-table-mtime)
-		(time-less-p mmix--address-table-mtime
+                (time-less-p mmix--address-table-mtime
                              (file-attribute-modification-time
                               (file-attributes mmo))))
-	(mmix--build-address-table mmo))
+        (mmix--build-address-table mmo))
       (gethash key mmix--address-table))))
 
-(defun mmix--line-for-address (file address)
-  "Return line number for ADDRESS in FILE from cache.
-This is the inverse of `mmix--address-for-line'.
-Rebuilds cache if needed."
-  (let* ((mmo (concat (file-name-sans-extension file) ".mmo"))
-         (truename (file-truename file)))
-    ;; Rebuild cache if we have none or the .mmo changed since last build.
+
+(defun mmix--location-for-address (address)
+  "Return cons (FILE . LINE) for ADDRESS from cache, or nil.
+
+This is the inverse of `mmix--address-for-line'.  Rebuilds cache if needed.
+This function consults `mmix--address-to-location-table' so it works even
+when the address belongs to a different source file."
+  (when-let* ((buf (get-buffer "*MMIX-Interactive*"))
+              (proc (get-buffer-process buf))
+              (mmo (process-get proc 'mmix-mmo-file)))
     (when (or (null mmix--address-table-mtime)
-              (time-less-p mmix--address-table-mtime
-                           (file-attribute-modification-time
-                            (file-attributes mmo))))
+              (and (file-exists-p mmo)
+                   (time-less-p mmix--address-table-mtime
+                                (file-attribute-modification-time
+                                 (file-attributes mmo)))))
       (mmix--build-address-table mmo))
-    (when-let ((line-info (gethash address mmix--address-to-line-info-table)))
-      (when (string-match "\\(.*\\):\\([0-9]+\\)$" line-info)
-        (let ((file-from-key (match-string 1 line-info))
-              (line-str (match-string 2 line-info)))
-          (when (string-equal truename file-from-key)
-            (string-to-number line-str)))))))
+    (gethash address mmix--address-to-location-table)))
+
 
 ;;;;
 ;;;; Overlay arrow support
@@ -205,9 +211,12 @@ This variable is made buffer-local in `mmix-debug-mode' buffers.")
         (mmix--remove-halted-point) ; Remove previous halted point overlay.
         (goto-char (point-min))
         (forward-line (1- line))
-        (let ((ov (make-overlay (line-beginning-position) (line-beginning-position))))
+        (let ((ov (make-overlay (line-beginning-position)
+				(line-beginning-position))))
           (overlay-put ov 'before-string
-                       (propertize " " 'display '(left-fringe mmix-halted-point mmix-halted-point-face)))
+                       (propertize " " 'display
+				   '(left-fringe mmix-halted-point
+						 mmix-halted-point-face)))
           (setq-local mmix--halted-point-overlay ov))))))
 
 (defun mmix--show-execution-point (file line)
@@ -417,6 +426,26 @@ properties: `mmix-marker', `evaporate', and `front-advance'."
       (overlay-put ov 'before-string
                    (propertize " " 'display `(left-fringe ,bmp ,face)))))))
 
+(defun mmix--normalize-hex-address (s)
+  "Return integer value of hex address string S.
+Accepts forms like \"1000\", \"#1000\" or \"0x1000\"."
+  (let* ((clean (replace-regexp-in-string "\\`\\(?:#\\|0x\\)" "" s)))
+    (string-to-number clean 16)))
+
+(defun mmix--set-marker-flag (file line flag on)
+  "Ensure an overlay marker at FILE:LINE and set FLAG to ON.
+FLAG is one of `mmix-break' or `mmix-trace'.  Updates visuals and removes
+overlay if neither break nor trace nor initial-break remain."
+  (when (and file line (integerp line) (> line 0))
+    (let* ((buf (find-file-noselect file)))
+      (with-current-buffer buf
+        (save-excursion
+          (goto-char (point-min))
+          (forward-line (1- line))
+          (let ((ov (or (mmix--marker-at-bol)
+                        (mmix--new-marker-at-bol))))
+            (overlay-put ov flag (and on t))
+            (mmix--update-marker-visuals ov)))))))
 
 (defun mmix--toggle (pos type)
   "Toggle TYPE (either :break or :trace) at POS.
@@ -835,9 +864,53 @@ but then we don't see the change."
   (add-hook 'comint-preoutput-filter-functions #'mmix--output-filter nil t))
 
 (defun mmix--input-filter (input)
-  "Process INPUT to MMIX from user."
-  (cond ((string-match-p "^@" input)
-	 (setq mmix--refresh-state-on-prompt-p t)))
+  "Process INPUT to MMIX from user.
+
+@ (go to location) needs to refresh the state,
+                   so the instruction pointer is synced.
+
+bx, b, t, u is setting/removing breakpoint/tracepoint,
+            the address will always be hex,
+            the simulator breaks after the breakpoint,
+            visually it is thus best to place the mark on the next instruction."
+  (cond
+   ;; Keep existing @ behavior: schedule a quick 's' to refresh location/arrow.
+   ((string-match-p "^@" input)
+    (setq mmix--refresh-state-on-prompt-p t))
+
+   ;; User sets a breakpoint: bx <addr>.
+   ;; In our UI we mark the break offset, so that is addr+4.
+   ((string-match "^bx\\s-*\\(?:#\\|0x\\)?\\([0-9a-fA-F]+\\)\\s-*" input)
+    (let* ((raw (match-string 1 input))
+           (bx-addr (mmix--normalize-hex-address raw))
+           (instr-addr (+ bx-addr 4)))
+      (when-let ((loc (mmix--location-for-address instr-addr)))
+        (mmix--set-marker-flag (car loc) (cdr loc) 'mmix-break t))))
+
+   ;; User clears a breakpoint: b <addr>. That undoes the bx at <addr>.
+   ;; So again translate to instr-addr = addr+4.
+   ((string-match "^b\\s-*\\(?:#\\|0x\\)?\\([0-9a-fA-F]+\\)\\s-*" input)
+    (let* ((raw (match-string 1 input))
+           (b-addr (mmix--normalize-hex-address raw))
+           (instr-addr (+ b-addr 4)))
+      (when-let ((loc (mmix--location-for-address instr-addr)))
+        (mmix--set-marker-flag (car loc) (cdr loc) 'mmix-break nil))))
+
+   ;; User sets a tracepoint: t <addr> (trace uses the *exact* address).
+   ((string-match "^t\\s-*\\(?:#\\|0x\\)?\\([0-9a-fA-F]+\\)\\s-*" input)
+    (let* ((raw (match-string 1 input))
+           (addr (mmix--normalize-hex-address raw)))
+      (when-let ((loc (mmix--location-for-address addr)))
+        (mmix--set-marker-flag (car loc) (cdr loc) 'mmix-trace t))))
+
+   ;; User clears a tracepoint: u <addr>.
+   ((string-match "^u\\s-*\\(?:#\\|0x\\)?\\([0-9a-fA-F]+\\)\\s-*" input)
+    (let* ((raw (match-string 1 input))
+           (addr (mmix--normalize-hex-address raw)))
+      (when-let ((loc (mmix--location-for-address addr)))
+        (mmix--set-marker-flag (car loc) (cdr loc) 'mmix-trace nil)))))
+
+  ;; Always pass input through to the simulator unchanged.
   input)
 
 (defun mmix--output-filter (output)
@@ -862,14 +935,17 @@ but then we don't see the change."
          ((string-match "^line \\([0-9]+\\):.*$" ln)
           (let ((num (string-to-number (match-string 1 ln))))
             (mmix--pulse-line-in-source mmix--source-file num)))
-         ((string-match "\\(halted\\|now\\)? *at location #\\([0-9a-fA-F]+\\)" ln)
+         ((string-match "\\(halted\\|now\\)? *at location #\\([0-9a-fA-F]+\\)"
+			ln)
           (when-let* ((state (match-string 1 ln))
-		      (addr-hex (match-string 2 ln))
+                      (addr-hex (match-string 2 ln))
                       (addr (string-to-number addr-hex 16))
-                      (line (mmix--line-for-address mmix--source-file addr)))
+                      (location (mmix--location-for-address addr))
+		      (file (car location))
+                      (line (cdr location)))
             (pcase state
-              ("halted" (mmix--show-halted-point mmix--source-file line))
-              ("now" (mmix--show-execution-point mmix--source-file line))))))
+              ("halted" (mmix--show-halted-point file line))
+              ("now" (mmix--show-execution-point file line))))))
         (when (and append-to-result (not mmix--suppress-output-p))
           (setq result (concat result ln (if is-prompt "" "\n"))))))
     result))
