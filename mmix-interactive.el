@@ -664,12 +664,17 @@ PREFIX is the command prefix to ensure,
 (defconst mmix-interactive--dynamic-register-help-string
   "$<n><t>   show or set dynamic register n in format t
 
-    <t>   is ! (decimal)
+    <n>   is the register number, always decimal
+
+    <t>   is output format
+          in ! (decimal)
           or . (floating)
           or # (hex)
           or \" (string)
           or <empty> (previous <t>)
-          or =<value> (change value)"
+
+          or new value using
+          =<value>"
   "Help string for the dynamic register prompt.")
 
 (defun mmix-interactive-show-dynamic-register ()
@@ -683,12 +688,17 @@ With `?' shows help and reprompts."
 (defconst mmix-interactive--local-register-help-string
   "l<n><t>   show or set local register n in format t
 
-    <t>   is ! (decimal)
+    <n>   is the register number, always decimal
+
+    <t>   is output format
+          in ! (decimal)
           or . (floating)
           or # (hex)
           or \" (string)
           or <empty> (previous <t>)
-          or =<value> (change value)"
+
+          or new value using
+          =<value>"
   "Help string for the local register prompt.")
 
 (defun mmix-interactive-show-local-register ()
@@ -702,12 +712,17 @@ With `?' shows help and reprompts."
 (defconst mmix-interactive--global-register-help-string
   "g<n><t>   show or set global register n in format t
 
-    <t>   is ! (decimal)
+    <n>   is the register number, always decimal
+
+    <t>   is output format
+          in ! (decimal)
           or . (floating)
           or # (hex)
           or \" (string)
           or <empty> (previous <t>)
-          or =<value> (change value)"
+
+          or new value using
+          =<value>"
   "Help string for the global register prompt.")
 
 (defun mmix-interactive-show-global-register ()
@@ -721,14 +736,19 @@ With `?' shows help and reprompts."
 (defvar mmix-interactive--special-register-help-string
   (let* ((base-help "r<name><t>   show or set special register <name> in format t
 
-    <t>   is ! (decimal)
+   <name> is one of the special registers, see below
+
+    <t>   is output format
+          in ! (decimal)
           or . (floating)
           or # (hex)
           or \" (string)
           or <empty> (previous <t>)
-          or =<value> (change value)
 
-Available special registers (detailed):
+          or new value using
+          =<value>
+
+Available special registers:
 ")
          (registers (seq-filter (lambda (d) (eq (mmix-description-type d) 'register))
                                 (hash-table-values mmix-description-table)))
@@ -745,14 +765,19 @@ With `?' shows help and reprompts."
                                "r"))
 
 (defconst mmix-interactive--memory-help-string
-  "M<x><t>   set and/or show memory octabyte in format t
+  "M<x><t>   set and/or show memory octabyte at x in format t
 
-    <t>   is ! (decimal)
+    <x>   is an address, so always in hex
+
+    <t>   is output format
+          in ! (decimal)
           or . (floating)
           or # (hex)
           or \" (string)
           or <empty> (previous <t>)
-          or =<value> (change value)"
+
+          or new value using
+          =<value>"
   "Help string for the memory octabyte prompt.")
 
 (defun mmix-interactive-show-memory ()
@@ -766,12 +791,17 @@ With `?' shows help and reprompts."
 (defconst mmix-interactive--additional-memory-help-string
   "+<n><t>   show or set n additional octabytes in format t
 
-    <t>   is ! (decimal)
+    <n>   the number of additional octabytes, in deciamal
+
+    <t>   is output format for each
+          in ! (decimal)
           or . (floating)
           or # (hex)
           or \" (string)
           or <empty> (previous <t>)
-          or =<value> (change value)"
+
+          or new value for each using
+          =<value>"
   "Help string for the additional octabytes prompt.")
 
 (defun mmix-interactive-show-additional-memory ()
