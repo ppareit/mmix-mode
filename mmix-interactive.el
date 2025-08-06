@@ -1119,10 +1119,16 @@ bx, b, t, u is setting/removing breakpoint/tracepoint,
 ;;;; User entry point
 ;;;;
 
+(defvar mmix--program-arguments-history nil
+  "History for program arguments given to `mmix-interactive-run'.")
+
 ;;;###autoload
-(defun mmix-interactive-run ()
-  "Run MMIX debugger on the .mmo file for the current .mms buffer."
-  (interactive)
+(defun mmix-interactive-run (prefix)
+  "Run MMIX debugger on the .mmo file for the current .mms buffer.
+
+With PREFIX, prompt for command-line arguments to pass
+to the MMIX program."
+  (interactive "P")
   (let* ((mms-file (buffer-file-name))
          (mmo-file (concat (file-name-sans-extension mms-file) ".mmo")))
     ;; Check if we have a good source and object files
@@ -1156,9 +1162,14 @@ bx, b, t, u is setting/removing breakpoint/tracepoint,
                            (file-name-nondirectory mmo-file)))
             (user-error "Aborted"))
           (delete-process proc))))
-    (let* ((buf (make-comint "MMIX-Interactive"
-                             mmix-interactive-executable nil
-                             "-i" "-l" mmo-file))
+    (let* ((program-args (when prefix
+                             (read-string "Program arguments: "
+                                          (car mmix--program-arguments-history)
+                                          'mmix--program-arguments-history)))
+           (buf (make-comint "MMIX-Interactive"
+                       mmix-interactive-executable
+                       nil
+                       "-i" "-l" mmo-file (or program-args "")))
            (proc (get-buffer-process buf))
            (source-buf (current-buffer)))
       (with-current-buffer buf
