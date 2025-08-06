@@ -102,6 +102,15 @@
 (defvar mmix--address-to-location-table (make-hash-table)
   "Cache mapping address integer -> location cons (FILE . LINE).")
 
+(defvar mmix--symbol-table (make-hash-table :test #'equal)
+  "Cache mapping symbol name -> (TYPE . VALUE).
+
+TYPE is `constant' or `register'.
+
+We keep track of all the symbols in a mmix object,
+this is for instance used to print the value.  See
+for instance `mmix-interactive-print-symbol-value'.")
+
 (defvar mmix--address-table-mtime nil
   "Modification time of the .mmo file used to build the address caches.")
 
@@ -109,6 +118,7 @@
   "Parse MMO-FILE with mmotype and fill the address caches."
   (clrhash mmix--address-table)
   (clrhash mmix--address-to-location-table)
+  (clrhash mmix--symbol-table)
   (let ((re-full  (rx bol
                       (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
                       "(\"" (group (*? (not (any "\"")))) "\", line "
@@ -116,6 +126,7 @@
         (re-short (rx bol
                       (group (= 16 xdigit)) ":" (+ blank) (= 8 xdigit) (+ blank)
                       "(line " (group (+ digit)) ")"))
+	(re-symbol "^\\s-*\\([^ ]+\\) = \\([^ ]+\\)")
         (current-src nil))
     (with-temp-buffer
       (insert (shell-command-to-string
@@ -141,7 +152,23 @@
               (let* ((addr (string-to-number addr-hex 16))
                      (loc  (cons current-src line-num)))
                 (puthash loc addr mmix--address-table)
-                (puthash addr loc mmix--address-to-location-table))))))
+                (puthash addr loc mmix--address-to-location-table)))))
+	 ;; SYMBOL = VAL
+	 ((looking-at re-symbol)
+	  (let ((sym (match-string 1))
+		(valstr (match-string 2)))
+            (cond
+             ;; Symbol is a register (starts with '$')
+             ((string-prefix-p "$" valstr)
+              (let* ((regstr (substring valstr 1))
+                     (regnum (string-to-number regstr)))
+		(puthash sym (cons 'register regnum) mmix--symbol-table)))
+             ;; Symbol is a numeric constant or address (starts with '#')
+             ((string-prefix-p "#" valstr)
+              ;; Parse hex value after '#'
+              (let* ((hex (substring valstr 1))
+                     (num (string-to-number hex 16)))
+		(puthash sym (cons 'constant num) mmix--symbol-table)))))))
         (forward-line 1)))
     (setq mmix--address-table-mtime
           (file-attribute-modification-time (file-attributes mmo-file)))))
@@ -182,6 +209,99 @@ when the address belongs to a different source file."
                                  (file-attributes mmo)))))
       (mmix--build-address-table mmo))
     (gethash address mmix--address-to-location-table)))
+
+;;;;
+;;;; Symbol value support
+;;;;
+
+(defvar mmix--last-query-result nil
+  "Temporary storage for the last symbol value query output.")
+
+(defvar mmix--waiting-for-value-p nil
+  "Non-nil when waiting for a symbol value output from the simulator.")
+
+(defun mmix--interactive-symbol-value (input)
+  "Return the current value of an MMIX symbol as a cons (SYMBOL . VALUE).
+
+INPUT should be a string like SYMBOL[format] or a symbol;
+the optional [format] is one of ! . # \".  This function queries
+the simulator if needed and returns a cons (SYMBOL . VALUE-STRING).
+
+VALUE-STRING is nil if no value could be retrieved.
+
+VALUE-STRING is in the format outputted by the simulator"
+  (when (symbolp input)
+    (setq input (symbol-name input)))
+  (unless (process-live-p (get-buffer-process "*MMIX-Interactive*"))
+    (user-error "No active MMIX debugging session"))
+  ;; Parse symbol and optional format specifier.
+  (let* ((re-symbol "\\`\\s-*\\(.+?\\)\\s-*\\([!.#\"]\\)?\\s-*\\'")
+         (_ (or (and (stringp input) (string-match re-symbol input))
+                (user-error "Invalid format")))
+         (sym (or (match-string 1 input)
+                  (user-error "No symbol specified")))
+         (format-spec (or (match-string 2 input) ""))
+         (info (or (gethash sym mmix--symbol-table)
+                   (user-error "Symbol `%s' not in simulator" sym)))
+         (type (car info))
+         (value (cdr info)))
+    (pcase type
+      ;; Constant symbol: just display its value.
+      ('constant
+       (unless (string-empty-p format-spec)
+         (error "Unable to specify format for constants.  (FIXME)"))
+       (cons sym (format "%d" value)))
+      ;; Register-backed symbol: query the simulator for the current value.
+      ('register
+       (let* ((regnum value)
+              (cmd   (format "$%d%s" regnum format-spec))
+              (proc  (get-buffer-process "*MMIX-Interactive*")))
+         (setq mmix--last-query-result nil
+               mmix--waiting-for-value-p t
+               mmix--suppress-output-p t)
+         (mmix--send-console-command cmd :silent t)
+         (while (and mmix--waiting-for-value-p
+                     (accept-process-output proc 0.5)))
+         (cons sym (if (not mmix--last-query-result)
+                       nil
+                     (string-trim mmix--last-query-result)))))
+      (_ (user-error "Unknown symbol type: %S" type)))))
+
+(defun mmix--insert-prompt ()
+  "Insert a comint-like prompt with proper properties."
+  (let ((start (point)))
+    (insert "mmix> ")
+    (add-text-properties start (point)
+			 '(font-lock-face comint-highlight-prompt
+					  rear-nonsticky
+					  (font-lock-face face)))))
+
+(defun mmix-interactive-print-symbol-value ()
+  "Print the current value of an MMIX symbol.
+
+The value is printed in the `*MMIX-Interactive*` buffer.
+This prompts for a symbol to inspect, using the symbol at point as a
+default if available.  The user must enter SYMBOL[format] where the optional
+[format] is one of ! . # \"."
+  (interactive)
+  (let* ((default-sym (let* ((raw (thing-at-point 'symbol t))
+                             (sym (and raw (substring-no-properties raw))))
+                        (and sym (gethash sym mmix--symbol-table) sym)))
+         (input (read-string "Symbol [format]: " default-sym))
+         (result (mmix--interactive-symbol-value input))
+         (sym (car result))
+         (value (cdr result))
+         (comint-buf (get-buffer "*MMIX-Interactive*")))
+    (with-current-buffer comint-buf
+      (let* ((proc (get-buffer-process (current-buffer)))
+             (proc-mark (process-mark proc))
+             (inhibit-read-only t))
+	(goto-char proc-mark)
+	(insert (format "p %s\n" input))
+	(insert (format "%s=%s\n" sym value))
+	(mmix--insert-prompt)
+	(set-marker proc-mark (point))
+	(display-buffer (current-buffer))))))
 
 
 ;;;;
@@ -835,6 +955,7 @@ With `?' shows help and reprompts."
     (define-key map (kbd "+") #'mmix-interactive-show-additional-memory)
     (define-key map (kbd "b") #'mmix-toggle-breakpoint)
     (define-key map (kbd "@") #'mmix-interactive-goto-location)
+    (define-key map (kbd "p") #'mmix-interactive-print-symbol-value)
     map))
 
 
@@ -954,6 +1075,16 @@ bx, b, t, u is setting/removing breakpoint/tracepoint,
     (dolist (ln lines)
       (let ((is-prompt (string-match-p "^mmix> *$" ln))
             (append-to-result t))
+	;; If waiting for a symbol value, store lines in mmix--last-query-result
+        (when mmix--waiting-for-value-p
+          (if (not is-prompt)
+	      (setq mmix--last-query-result ; storing lines
+                    (if mmix--last-query-result
+                        (concat mmix--last-query-result "\n" ln)
+                      ln))
+            (setq mmix--waiting-for-value-p nil) ; else at prompt
+            (setq mmix--suppress-output-p nil))  ; then stop storing
+	  (setq append-to-result nil))
         (cond
          (is-prompt
           (setq mmix--running-p nil)
