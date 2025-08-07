@@ -284,24 +284,20 @@ This prompts for a symbol to inspect, using the symbol at point as a
 default if available.  The user must enter SYMBOL[format] where the optional
 [format] is one of ! . # \"."
   (interactive)
-  (let* ((default-sym (let* ((raw (thing-at-point 'symbol t))
-                             (sym (and raw (substring-no-properties raw))))
-                        (and sym (gethash sym mmix--symbol-table) sym)))
-         (input (read-string "Symbol [format]: " default-sym))
-         (result (mmix--interactive-symbol-value input))
-         (sym (car result))
-         (value (cdr result))
-         (comint-buf (get-buffer "*MMIX-Interactive*")))
-    (with-current-buffer comint-buf
-      (let* ((proc (get-buffer-process (current-buffer)))
-             (proc-mark (process-mark proc))
-             (inhibit-read-only t))
-	(goto-char proc-mark)
-	(insert (format "p %s\n" input))
-	(insert (format "%s=%s\n" sym value))
-	(mmix--insert-prompt)
-	(set-marker proc-mark (point))
-	(display-buffer (current-buffer))))))
+  (let ((comint-buf (get-buffer "*MMIX-Interactive*")))
+    (if (not (and comint-buf (process-live-p (get-buffer-process comint-buf))))
+        (user-error "No active MMIX debugging session")
+      (let* ((default-sym (let* ((raw (thing-at-point 'symbol t))
+                                 (sym (and raw (substring-no-properties raw))))
+                            (and sym (gethash sym mmix--symbol-table) sym)))
+             (input (read-string "Symbol [format]: " default-sym)))
+        (with-current-buffer comint-buf
+          (let* ((proc (get-buffer-process (current-buffer)))
+                 (inhibit-read-only t))
+            (goto-char (process-mark proc))
+            (insert (format "p%s" input))
+            (comint-send-input nil t)
+            (display-buffer (current-buffer))))))))
 
 
 ;;;;
