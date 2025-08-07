@@ -1010,9 +1010,31 @@ but then we don't see the change."
   (setq-local comint-move-point-for-output t)
   (setq-local comint-scroll-show-maximum-output t)
 
+  ;; Catch extra commands, like 'p symbol[format]'
+  (setq-local comint-input-sender #'mmix--input-sender)
+
   ;; Input/Output filters
   (add-hook 'comint-input-filter-functions #'mmix--input-filter nil t)
   (add-hook 'comint-preoutput-filter-functions #'mmix--output-filter nil t))
+
+(defun mmix--input-sender (proc input)
+  "Handle INPUT for the MMIX debugger in PROC.
+
+Intercept *p symbol[format]* locally, otherwise fall through to
+`comint-simple-send'."
+  (if (string-match "^p\\s-*\\(.*\\)$" input)
+      ;; do the work in Lisp and DON'T talk to the simulator
+      (let* ((arg  (match-string 1 input))
+             (pair (mmix--interactive-symbol-value arg))
+             (sym  (car pair))
+             (val  (cdr pair)))
+        (with-current-buffer (process-buffer proc)
+          (let ((inhibit-read-only t))
+            (insert (format "%s=%s\n" sym val))
+            (mmix--insert-prompt)
+            (set-marker (process-mark proc) (point)))))
+    ;; anything else: send unchanged
+    (comint-simple-send proc input)))
 
 (defun mmix--input-filter (input)
   "Process INPUT to MMIX from user.
