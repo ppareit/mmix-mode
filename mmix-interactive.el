@@ -728,7 +728,16 @@ we remove the overlay."
 (defun mmix-interactive-help ()
   "Show MMIX simulator help."
   (interactive)
-  (mmix--send-console-command "h"))
+  (let ((comint-buf (get-buffer "*MMIX-Interactive*")))
+    (if (not (and comint-buf (process-live-p (get-buffer-process comint-buf))))
+        (user-error "No active MMIX debugging session")
+      (with-current-buffer comint-buf
+        (let* ((proc (get-buffer-process (current-buffer)))
+               (inhibit-read-only t))
+          (goto-char (process-mark proc))
+          (insert "h")
+          (comint-send-input nil t)
+          (display-buffer (current-buffer)))))))
 
 (defun mmix-interactive-goto-location (&optional pos)
   "Go to an MMIX memory location at POS (or current line)."
@@ -1016,27 +1025,65 @@ but then we don't see the change."
   (add-hook 'comint-input-filter-functions #'mmix--input-filter nil t)
   (add-hook 'comint-preoutput-filter-functions #'mmix--output-filter nil t))
 
+(defconst mmix-interactive--help-string
+  "The interactive commands are:
+<return>   trace one instruction
+n          trace one instruction
+c          continue until halt or breakpoint
+q          quit the simulation
+s          show current statistics
+p<sym><t>  show symbol in format t
+l<n><t>    set and/or show local register in format t
+g<n><t>    set and/or show global register in format t
+rA<t>      set and/or show register rA in format t
+$<n><t>    set and/or show dynamic register in format t
+M<x><t>    set and/or show memory octabyte in format t
++<n><t>    set and/or show n additional octabytes in format t
+    <t> is ! (decimal) or . (floating) or # (hex) or \" (string)
+        or <empty> (previous <t>) or =<value> (change value)
+@<x>       go to location x
+b[rwx]<x>  set or reset breakpoint at location x
+t<x>       trace location x
+u<x>       untrace location x
+T          set current segment to Text_Segment
+D          set current segment to Data_Segment
+P          set current segment to Pool_Segment
+S          set current segment to Stack_Segment
+B          show all current breakpoints and tracepoints
+i<file>    insert commands from file
+-<option>  change a tracing/listing/profile option
+-?         show the tracing/listing/profile options"
+  "Help string for the `h' command in the interactive debugger.")
+
 (defun mmix--input-sender (proc input)
   "Handle INPUT for the MMIX debugger in PROC.
 
-Intercept *p symbol[format]* locally, otherwise fall through to
+Intercept *p symbol[format]* and *h* locally, otherwise fall through to
 `comint-simple-send'."
-  (if (string-match "^p\\s-*\\(.*\\)$" input)
-      ;; do the work in Lisp and DON'T talk to the simulator
-      (with-current-buffer (process-buffer proc)
-	(let ((inhibit-read-only t))
-	  (condition-case err
-	      (let* ((arg  (match-string 1 input))
-		     (pair (mmix--interactive-symbol-value arg))
-		     (sym  (car pair))
-		     (val  (cdr pair)))
-		(insert (format "%s=%s\n" sym val)))
-	    (user-error
-	     (insert (format "%s\n" (error-message-string err)))))
-          (mmix--insert-prompt)
-          (set-marker (process-mark proc) (point))))
+  (cond
+   ((string-match-p "^h\\s-*$" input)
+    (with-current-buffer (process-buffer proc)
+      (let ((inhibit-read-only t))
+        (insert mmix-interactive--help-string "\n")
+        (mmix--insert-prompt)
+        (set-marker (process-mark proc) (point)))))
+   ((string-match "^p\\s-*\\(.*\\)$" input)
+    ;; do the work in Lisp and DON'T talk to the simulator
+    (with-current-buffer (process-buffer proc)
+      (let ((inhibit-read-only t))
+        (condition-case err
+            (let* ((arg  (match-string 1 input))
+                   (pair (mmix--interactive-symbol-value arg))
+                   (sym  (car pair))
+                   (val  (cdr pair)))
+              (insert (format "%s=%s\n" sym val)))
+          (user-error
+           (insert (format "%s\n" (error-message-string err)))))
+        (mmix--insert-prompt)
+        (set-marker (process-mark proc) (point)))))
+   (t
     ;; anything else: send unchanged
-    (comint-simple-send proc input)))
+    (comint-simple-send proc input))))
 
 (defun mmix--input-filter (input)
   "Process INPUT to MMIX from user.
