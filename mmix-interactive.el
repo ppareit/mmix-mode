@@ -233,23 +233,26 @@ VALUE-STRING is in the format outputted by the simulator"
   (when (symbolp input)
     (setq input (symbol-name input)))
   (unless (process-live-p (get-buffer-process "*MMIX-Interactive*"))
-    (user-error "No active MMIX debugging session"))
+    (error "No active MMIX debugging session"))
   ;; Parse symbol and optional format specifier.
   (let* ((re-symbol "\\`\\s-*\\(.+?\\)\\s-*\\([!.#\"]\\)?\\s-*\\'")
          (_ (or (and (stringp input) (string-match re-symbol input))
                 (user-error "Invalid format")))
          (sym (or (match-string 1 input)
-                  (user-error "No symbol specified")))
+                  (user-error "%s"
+			      (format "Eh? What symbol."))))
          (format-spec (or (match-string 2 input) ""))
          (info (or (gethash sym mmix--symbol-table)
-                   (user-error "Symbol `%s' not in simulator" sym)))
+                   (user-error "%s"
+			       (format "Eh? Sorry, I don't have a symbol `%s'."
+				       sym))))
          (type (car info))
          (value (cdr info)))
     (pcase type
       ;; Constant symbol: just display its value.
       ('constant
        (unless (string-empty-p format-spec)
-         (error "Unable to specify format for constants.  (FIXME)"))
+         (user-error "Unable to specify format for constants.  (FIXME)"))
        (cons sym (format "%d" value)))
       ;; Register-backed symbol: query the simulator for the current value.
       ('register
@@ -265,7 +268,7 @@ VALUE-STRING is in the format outputted by the simulator"
          (cons sym (if (not mmix--last-query-result)
                        nil
                      (string-trim mmix--last-query-result)))))
-      (_ (user-error "Unknown symbol type: %S" type)))))
+      (_ (error "Unknown symbol type: %S" type)))))
 
 (defun mmix--insert-prompt ()
   "Insert a comint-like prompt with proper properties."
@@ -1020,15 +1023,18 @@ Intercept *p symbol[format]* locally, otherwise fall through to
 `comint-simple-send'."
   (if (string-match "^p\\s-*\\(.*\\)$" input)
       ;; do the work in Lisp and DON'T talk to the simulator
-      (let* ((arg  (match-string 1 input))
-             (pair (mmix--interactive-symbol-value arg))
-             (sym  (car pair))
-             (val  (cdr pair)))
-        (with-current-buffer (process-buffer proc)
-          (let ((inhibit-read-only t))
-            (insert (format "%s=%s\n" sym val))
-            (mmix--insert-prompt)
-            (set-marker (process-mark proc) (point)))))
+      (with-current-buffer (process-buffer proc)
+	(let ((inhibit-read-only t))
+	  (condition-case err
+	      (let* ((arg  (match-string 1 input))
+		     (pair (mmix--interactive-symbol-value arg))
+		     (sym  (car pair))
+		     (val  (cdr pair)))
+		(insert (format "%s=%s\n" sym val)))
+	    (user-error
+	     (insert (format "%s\n" (error-message-string err)))))
+          (mmix--insert-prompt)
+          (set-marker (process-mark proc) (point))))
     ;; anything else: send unchanged
     (comint-simple-send proc input)))
 
