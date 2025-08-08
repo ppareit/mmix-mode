@@ -238,13 +238,22 @@ RESULT-STRING is in the format outputted by the simulator"
   (unless (process-live-p (get-buffer-process "*MMIX-Interactive*"))
     (error "No active MMIX debugging session"))
   ;; Parse symbol and optional format specifier.
-  (let* ((re-symbol "\\`\\s-*\\(.+?\\)\\s-*\\(\\(?:[!.#\"]\\)\\|\\(?:=.*\\)\\)?\\s-*\\'")
+  (let* ((re-symbol (rx bol
+			(0+ (syntax whitespace))
+			(group (+ (not (any "!.#\"= \t\n\r")))) ; symbol
+			(0+ (syntax whitespace))
+			(optional
+			 (group (or (any "!.#\"")               ; format
+				    (seq "=" (0+ anything)))))
+			(0+ (syntax whitespace))
+			eol))
          (_ (or (and (stringp input) (string-match re-symbol input))
                 (user-error "Invalid format")))
          (sym (or (match-string 1 input)
                   (user-error "%s"
 			      (format "Eh? What symbol."))))
-         (format-spec (or (match-string 2 input) ""))
+         (format-spec (replace-regexp-in-string
+                       "^=\\s-+" "=" (or (match-string 2 input) "")))
          (info (or (gethash sym mmix--symbol-table)
                    (user-error "%s"
 			       (format "Eh? Sorry, I don't have a symbol `%s'."
