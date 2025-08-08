@@ -220,22 +220,25 @@ when the address belongs to a different source file."
 (defvar mmix--waiting-for-value-p nil
   "Non-nil when waiting for a symbol value output from the simulator.")
 
-(defun mmix--interactive-symbol-value (input)
-  "Return the current value of an MMIX symbol as a cons (SYMBOL . VALUE).
+(defun mmix--interactive-symbol-access (input)
+  "Perform an operation on an MMIX symbol.
 
-INPUT should be a string like SYMBOL[format] or a symbol;
-the optional [format] is one of ! . # \".  This function queries
-the simulator if needed and returns a cons (SYMBOL . VALUE-STRING).
+INPUT should be a string like `SYMBOL[format]' to get a value, or
+`SYMBOL=<value>' to set a register-backed symbol's value.  The
+optional `[format]' is one of !, ., #, \".
 
-VALUE-STRING is nil if no value could be retrieved.
+This function queries the simulator if needed and returns a cons
+`(SYMBOL . RESULT-STRING)'.
 
-VALUE-STRING is in the format outputted by the simulator"
+RESULT-STRING is nil if no value could be retrieved.
+
+RESULT-STRING is in the format outputted by the simulator"
   (when (symbolp input)
     (setq input (symbol-name input)))
   (unless (process-live-p (get-buffer-process "*MMIX-Interactive*"))
     (error "No active MMIX debugging session"))
   ;; Parse symbol and optional format specifier.
-  (let* ((re-symbol "\\`\\s-*\\(.+?\\)\\s-*\\([!.#\"]\\)?\\s-*\\'")
+  (let* ((re-symbol "\\`\\s-*\\(.+?\\)\\s-*\\(\\(?:[!.#\"]\\)\\|\\(?:=.*\\)\\)?\\s-*\\'")
          (_ (or (and (stringp input) (string-match re-symbol input))
                 (user-error "Invalid format")))
          (sym (or (match-string 1 input)
@@ -251,8 +254,10 @@ VALUE-STRING is in the format outputted by the simulator"
     (pcase type
       ;; Constant symbol: just display its value.
       ('constant
-       (unless (string-empty-p format-spec)
-         (user-error "Unable to specify format for constants.  (FIXME)"))
+       (when (and format-spec (not (string-empty-p format-spec)))
+         (if (string-prefix-p "=" format-spec)
+             (user-error "Eh? Cannot change the value of a constant")
+           (user-error "Cannot specify a display format for a constant")))
        (cons sym (format "%d" value)))
       ;; Register-backed symbol: query the simulator for the current value.
       ('register
@@ -279,28 +284,40 @@ VALUE-STRING is in the format outputted by the simulator"
 					  rear-nonsticky
 					  (font-lock-face face)))))
 
-(defun mmix-interactive-print-symbol-value ()
-  "Print the current value of an MMIX symbol.
+(defconst mmix-interactive--symbol-help-string
+  "p<sym><t>  set and/or show value of symbol <sym> in format <t>
 
-The value is printed in the `*MMIX-Interactive*` buffer.
-This prompts for a symbol to inspect, using the symbol at point as a
-default if available.  The user must enter SYMBOL[format] where the optional
-[format] is one of ! . # \"."
+    <sym> a known symbol (constant or register-backed)
+    <t>   is output format:
+          ! (decimal)  . (floating)  # (hex)  \" (string)
+          <empty> (previous <t>)  or  =<value> (change if register-backed)
+
+Examples:
+  pN#        show symbol N in hex
+  psum!      show symbol sum in decimal
+  pi=\"X\"     set register-backed symbol i to string \"X\""
+  "Help for the symbol access prompt.")
+
+
+(defun mmix-interactive-access-symbol-value ()
+  "Access (get or set) the value of an MMIX symbol.
+
+Prompts for `SYMBOL[format]' (or `SYMBOL=<value>') and sends `p...'.
+Uses the symbol at point as default when known."
   (interactive)
   (let ((comint-buf (get-buffer "*MMIX-Interactive*")))
-    (if (not (and comint-buf (process-live-p (get-buffer-process comint-buf))))
-        (user-error "No active MMIX debugging session")
-      (let* ((default-sym (let* ((raw (thing-at-point 'symbol t))
-                                 (sym (and raw (substring-no-properties raw))))
-                            (and sym (gethash sym mmix--symbol-table) sym)))
-             (input (read-string "Symbol [format]: " default-sym)))
-        (with-current-buffer comint-buf
-          (let* ((proc (get-buffer-process (current-buffer)))
-                 (inhibit-read-only t))
-            (goto-char (process-mark proc))
-            (insert (format "p%s" input))
-            (comint-send-input nil t)
-            (display-buffer (current-buffer))))))))
+    (unless (and comint-buf (process-live-p (get-buffer-process comint-buf)))
+      (user-error "No active MMIX debugging session"))
+    (let* ((raw (thing-at-point 'symbol t))
+           (sym (and raw (substring-no-properties raw)))
+           (default-sym (and sym (gethash sym mmix--symbol-table) sym)))
+      ;; Prefill after the 'p' prefix so users can immediately add ! . # " or =...
+      (mmix--read-and-send-command
+       "Symbol [format] (or ?): "
+       mmix-interactive--symbol-help-string
+       "p"
+       default-sym))))
+
 
 
 ;;;;
@@ -394,13 +411,34 @@ When not running :silent, we will make sure that the window is displayed."
       (when refresh-p
         (with-current-buffer buf
           (setq mmix--refresh-state-on-prompt-p t)))
-      (unless silent-p
+      (if silent-p
+	  (comint-send-string proc (concat cmd "\n"))
 	(display-buffer buf)
         (with-current-buffer buf
           (goto-char (process-mark proc))
-          (insert cmd "\n")
-          (set-marker (process-mark proc) (point))))
-      (comint-send-string proc (concat cmd "\n")))))
+          (insert cmd)
+          (comint-send-input))))))
+
+(defun mmix--read-and-send-command (prompt help-string prefix
+                                           &optional initial-suffix refresh-p)
+  "Read a command with HELP-STRING on `?' and send it to the MMIX process.
+
+PROMPT         minibuffer prompt string.
+HELP-STRING    text to show when the user hits `?' while prompting.
+PREFIX         command prefix to ensure (e.g. \"g\" or \"$\" or \"p\").
+INITIAL-SUFFIX optional initial text inserted *after* PREFIX.
+REFRESH-P      when non-nil, schedule a UI refresh after the command.
+
+The minibuffer starts with PREFIX concatenated with INITIAL-SUFFIX (if any).
+If the user deletes PREFIX, it is re-added before sending."
+  (let* ((minibuffer-help-form help-string)
+         (help-event-list (cons ?? help-event-list))
+         (initial (concat prefix (or initial-suffix "")))
+         (query (read-string prompt initial)))
+    (unless (string-prefix-p prefix query)
+      (setq query (concat prefix query)))
+    (mmix--send-console-command query :refresh refresh-p)))
+
 
 ;;;;
 ;;;; Unified breakpoint and tracepoint handling
@@ -776,19 +814,6 @@ we remove the overlay."
   (interactive)
   (mmix--send-console-command "B"))
 
-(defun mmix--read-and-send-command (prompt help-string prefix)
-  "Read command from user with help and send to MMIX process.
-PROMPT is the minibuffer prompt string.
-HELP-STRING is the help text to display on `?`.
-PREFIX is the command prefix to ensure,
-       which we also display as initial input."
-  (let* ((minibuffer-help-form help-string)
-         (help-event-list (cons ?? help-event-list))
-         (query (read-string prompt prefix)))
-    (unless (string-prefix-p prefix query)
-      (setq query (format "%s%s" prefix query)))
-    (mmix--send-console-command query)))
-
 (defconst mmix-interactive--dynamic-register-help-string
   "$<n><t>   show or set dynamic register n in format t
 
@@ -963,7 +988,7 @@ With `?' shows help and reprompts."
     (define-key map (kbd "+") #'mmix-interactive-show-additional-memory)
     (define-key map (kbd "b") #'mmix-toggle-breakpoint)
     (define-key map (kbd "@") #'mmix-interactive-goto-location)
-    (define-key map (kbd "p") #'mmix-interactive-print-symbol-value)
+    (define-key map (kbd "p") #'mmix-interactive-access-symbol-value)
     map))
 
 
@@ -1032,7 +1057,7 @@ n          trace one instruction
 c          continue until halt or breakpoint
 q          quit the simulation
 s          show current statistics
-p<sym><t>  show symbol in format t
+p<sym><t>  set and/or show value of symbol in format t
 l<n><t>    set and/or show local register in format t
 g<n><t>    set and/or show global register in format t
 rA<t>      set and/or show register rA in format t
@@ -1073,7 +1098,7 @@ Intercept *p symbol[format]* and *h* locally, otherwise fall through to
       (let ((inhibit-read-only t))
         (condition-case err
             (let* ((arg  (match-string 1 input))
-                   (pair (mmix--interactive-symbol-value arg))
+                   (pair (mmix--interactive-symbol-access arg))
                    (sym  (car pair))
                    (val  (cdr pair)))
               (insert (format "%s=%s\n" sym val)))
