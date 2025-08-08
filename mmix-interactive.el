@@ -254,11 +254,16 @@ RESULT-STRING is in the format outputted by the simulator"
     (pcase type
       ;; Constant symbol: just display its value.
       ('constant
-       (when (and format-spec (not (string-empty-p format-spec)))
-         (if (string-prefix-p "=" format-spec)
-             (user-error "Eh? Cannot change the value of a constant")
-           (user-error "Cannot specify a display format for a constant")))
-       (cons sym (format "%d" value)))
+       (let ((n value))
+	 (pcase format-spec
+	   (""  (cons sym (format "%d" n)))
+	   ("!" (cons sym (format "%d" n)))
+	   ("#" (cons sym (format "#%x" n)))
+	   ("." (cons sym (number-to-string (float n))))
+	   ("\"" (user-error "Unable to display in this format.  (fixme)"))
+	   (_ (if (string-prefix-p "=" format-spec)
+		  (user-error "Eh? Cannot change the value of a constant")
+		(user-error "Unknown display format for constant: %s" format-spec))))))
       ;; Register-backed symbol: query the simulator for the current value.
       ('register
        (let* ((regnum value)
